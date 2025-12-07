@@ -255,14 +255,14 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
       children: [
         Row(
           children: [
-            // Expanded(
-            //   child: ElevatedButton.icon(
-            //     onPressed: onCameraTap,
-            //     icon: const Icon(Icons.camera_alt),
-            //     label: Text("Capture $title"),
-            //   ),
-            // ),
-            // const SizedBox(width: 12),
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed: onCameraTap,
+                icon: const Icon(Icons.camera_alt),
+                label: Text("Capture $title"),
+              ),
+            ),
+            const SizedBox(width: 12),
             Expanded(
               child: ElevatedButton.icon(
                 onPressed: onGalleryTap,
