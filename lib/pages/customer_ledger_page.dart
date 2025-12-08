@@ -104,6 +104,7 @@ class CustomerLedgerPage extends StatelessWidget {
             // -------------------------------
             // TRANSACTION HISTORY TITLE
             // -------------------------------
+
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -252,11 +253,21 @@ class CustomerLedgerPage extends StatelessWidget {
     final isLoan = t.type == TransactionType.loan;
     final color = isLoan ? Colors.red : Colors.green;
     final icon = isLoan ? Icons.arrow_downward : Icons.arrow_upward;
-    final interest = t.amount * (t.interestPercent / 100);
+    double interest = t.amount * (t.interestPercent / 100);
     final total = t.amount + interest;
+    double principal = t.amount;
+
+
+    if (isLoan && t.interestPercent > 0) {
+      // Since t.amount is the TOTAL, we need to calculate the original principal.
+      // Formula: principal = total / (1 + interest_rate)
+      principal = t.amount / (1 + (t.interestPercent / 100));
+      interest = t.amount - principal;
+    }
 
     // *** FIX IS HERE: Create a more descriptive title ***
     String title;
+
     if (isLoan) {
       // If it's a loan, the existing logic is fine.
       title = "Loan${t.loanKind.isNotEmpty ? ' - ${t.loanKind}' : ''}";
@@ -319,14 +330,15 @@ class CustomerLedgerPage extends StatelessWidget {
           if (isLoan && t.interestPercent > 0) ...[
             const SizedBox(height: 10),
             Text(
-              "(Principal: GHS ${t.amount.toStringAsFixed(2)} + Interest: GHS ${interest.toStringAsFixed(2)} = GHS ${total.toStringAsFixed(2)})",
-              style: const TextStyle(fontSize: 13, color: Colors.grey),
+              "(Loan Amount + Interest = GHS ${t.amount.toStringAsFixed(2)})",
+
+              style: const TextStyle(fontSize: 13, color: Colors.black),
             ),
           ],
           const SizedBox(height: 8),
           Text(
             t.date,
-            style: const TextStyle(fontSize: 13, color: Colors.grey),
+            style: const TextStyle(fontSize: 13, color: Colors.black),
           ),
         ],
       ),

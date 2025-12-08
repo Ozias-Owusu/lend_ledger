@@ -51,7 +51,7 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
     // Apply internal map
     if (_loanKind.toLowerCase().contains("daily")) {
       _loanKind = "daily";
-      _interestPercent = 5.0;
+      _interestPercent;
     } else if (_loanKind.toLowerCase().contains("soft")) {
       _loanKind = "soft";
       _interestPercent = 0.0;
@@ -226,7 +226,7 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
 
   String _formatLoanDisplay(LoanRecord loan) {
     final currencySymbol = 'GHS';
-    final loanBalance = loan.remainingAmount;
+    final loanBalance = loan.amount;
 
     final loanDate = DateTime.tryParse(loan.date);
     final formattedDate = loanDate != null

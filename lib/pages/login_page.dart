@@ -17,6 +17,7 @@ class _LoginPageState extends State<LoginPage> {
 
   bool _loading = false;
   bool _isLogin = true;
+  bool _showPassword = false;
 
   void _toggleFormType() {
     setState(() {
@@ -141,9 +142,9 @@ class _LoginPageState extends State<LoginPage> {
                       const SizedBox(height: 16),
                       _buildTextFormField(
                         controller: _passCtl,
+                        isPassword: true,
                         label: 'Password',
                         icon: Icons.lock,
-                        obscureText: true,
                         validator: (v) {
                           if (v == null || v.isEmpty) {
                             return 'Password is required';
@@ -200,30 +201,43 @@ class _LoginPageState extends State<LoginPage> {
       ),
     );
   }
-
-  // Helper method styling is updated for a card-based UI
   TextFormField _buildTextFormField({
     required TextEditingController controller,
     required String label,
-    required IconData icon,
+    IconData? icon,
     required String? Function(String?) validator,
-    bool obscureText = false,
+    bool isPassword = false,
     TextInputType keyboardType = TextInputType.text,
   }) {
     return TextFormField(
       controller: controller,
-      style: const TextStyle(color: Colors.black87), // Dark text for light card
+      style: const TextStyle(color: Colors.black87),
       decoration: InputDecoration(
         labelText: label,
         labelStyle: TextStyle(color: Colors.grey.shade700),
         prefixIcon: Icon(icon, color: Colors.grey.shade600),
+
+        suffixIcon: isPassword
+            ? IconButton(
+          icon: Icon(
+            _showPassword ? Icons.visibility : Icons.visibility_off,
+            color: Colors.grey.shade600,
+          ),
+          onPressed: () {
+            setState(() {
+              _showPassword = !_showPassword;
+            });
+          },
+        )
+            : null,
+
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12.0),
         ),
         filled: true,
-        fillColor: Colors.grey.shade100, // Light background for fields
+        fillColor: Colors.grey.shade100,
       ),
-      obscureText: obscureText,
+      obscureText: isPassword ? !_showPassword : false,
       validator: validator,
       keyboardType: keyboardType,
     );

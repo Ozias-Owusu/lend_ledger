@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:lend_ledger/pages/dashboard_page.dart';
 import 'package:lend_ledger/pages/landing_page.dart';
+import 'package:lend_ledger/pages/login_page.dart';
 import 'package:lend_ledger/state/app_state.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -12,7 +15,12 @@ void main() async {
   await _requestPermissions();
 
   await appState.loadFromDb();
-  runApp(MyApp(appState: appState));
+
+  // Check login status using SharedPreferences
+  final sp = await SharedPreferences.getInstance();
+  bool isLoggedIn = sp.getBool('isLoggedIn') ?? false;
+
+  runApp(MyApp(appState: appState, isLoggedIn: isLoggedIn));
 }
 // Function to request necessary permissions
 Future<void> _requestPermissions() async {
@@ -35,7 +43,8 @@ Future<void> _requestPermissions() async {
 
 class MyApp extends StatelessWidget {
   final AppState appState;
-  const MyApp({super.key, required this.appState});
+  final bool isLoggedIn;
+  const MyApp({super.key, required this.appState, required this.isLoggedIn});
 
   @override
   Widget build(BuildContext context) {
@@ -49,7 +58,8 @@ class MyApp extends StatelessWidget {
       child: MaterialApp(
         title: 'Loan Management',
         theme: ThemeData(primarySwatch: Colors.blue),
-        home: LandingPage(),
+        home: isLoggedIn ? LoginPage(): LandingPage(),
+        // home: LandingPage(),
         debugShowCheckedModeBanner: false,
       ),
     );
