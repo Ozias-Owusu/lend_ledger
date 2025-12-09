@@ -222,8 +222,13 @@ class AppState extends ChangeNotifier {
     await loadFromDb();
   }
 
+  String generateUUID() {
+    return _uuid.v4();
+  }
+
   // --- Transaction Operations (DB Only) ---
   Future<void> addTransaction({
+    required String id,
     required String customerId,
     required TransactionType type,
     required String loanKind,
@@ -233,7 +238,7 @@ class AppState extends ChangeNotifier {
     String note = '',
   }) async {
     final newTransaction = TransactionRecord(
-      id: _uuid.v4(),
+      id: id,
       customerId: customerId,
       type: type,
       loanKind: loanKind,
