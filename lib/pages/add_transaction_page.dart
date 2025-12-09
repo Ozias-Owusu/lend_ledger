@@ -259,7 +259,8 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
 
     // In C:/Users/ooantwi/StudioProjects/Lend_Ledger/lib/pages/add_transaction_page.dart
 
-// Add this method inside the _AddTransactionPageState class
+    // In C:/Users/ooantwi/StudioProjects/Lend_Ledger/lib/pages/add_transaction_page.dart
+
     Future<void> _saveTransaction() async {
       final amount = double.tryParse(_amountCtl.text);
       if (amount == null || amount <= 0) {
@@ -277,30 +278,49 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
         return;
       }
 
+      // --- *** THE FIX IS HERE *** ---
+      // If it's a repayment, validate that the amount isn't more than what's owed on that specific loan.
+      if (_type == TransactionType.repayment) {
+        final loanBalance = _selectedLoan!.remainingAmount;
+        if (amount > loanBalance) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              backgroundColor: Colors.red,
+              content: Text(
+                  "Repayment amount cannot be more than the selected loan's balance of GHS ${loanBalance.toStringAsFixed(2)}."),
+            ),
+          );
+          return; // Stop the function from proceeding
+        }
+      }
+      // --- *** END OF FIX *** ---
+
       final appState = Provider.of<AppState>(context, listen: false);
 
       String note = '';
       String loanKind = _loanKind; // "daily" or "soft"
-      double loanAmount = amount;
+      double finalAmount = amount; // Use a different variable for the final amount
 
       // If it's a Daily Loan, calculate the total amount to be saved.
       if (_type == TransactionType.loan && _loanKind == "daily") {
         final interest = amount * (_interestPercent / 100);
-        loanAmount = amount + interest; // This is the total amount the customer owes for this loan
+        finalAmount =
+            amount + interest; // This is the total amount the customer owes for this loan
       }
 
-      // For repayments, construct a helpful note and determine the loan kind from the selected loan
+      // For repayments, construct a helpful note
       if (_type == TransactionType.repayment) {
         note = 'Repayment for loan: ${_selectedLoan!.id}';
-        loanKind = _selectedLoan!.loanKind; // Use the original loan's kind
+        loanKind = _selectedLoan!.loanKind;
       }
 
       await appState.addTransaction(
         customerId: widget.customer.id,
         type: _type,
         loanKind: loanKind,
-        amount: loanAmount,
-        interestPercent: (_type == TransactionType.loan && _loanKind == "daily") ? _interestPercent : 0.0,
+        amount: finalAmount, // Pass the final amount
+        interestPercent:
+        (_type == TransactionType.loan && _loanKind == "daily") ? _interestPercent : 0.0,
         date: DateTime.now().toIso8601String(),
         note: note,
       );
@@ -310,6 +330,59 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
         Navigator.pop(context);
       }
     }
+
+
+// Add this method inside the _AddTransactionPageState class
+//     Future<void> _saveTransaction() async {
+//       final amount = double.tryParse(_amountCtl.text);
+//       if (amount == null || amount <= 0) {
+//         ScaffoldMessenger.of(context).showSnackBar(
+//           const SnackBar(content: Text("Please enter a valid amount.")),
+//         );
+//         return;
+//       }
+//
+//       // For repayments, ensure a specific loan has been selected
+//       if (_type == TransactionType.repayment && _selectedLoan == null) {
+//         ScaffoldMessenger.of(context).showSnackBar(
+//           const SnackBar(content: Text("Please select which loan to repay.")),
+//         );
+//         return;
+//       }
+//
+//       final appState = Provider.of<AppState>(context, listen: false);
+//
+//       String note = '';
+//       String loanKind = _loanKind; // "daily" or "soft"
+//       double loanAmount = amount;
+//
+//       // If it's a Daily Loan, calculate the total amount to be saved.
+//       if (_type == TransactionType.loan && _loanKind == "daily") {
+//         final interest = amount * (_interestPercent / 100);
+//         loanAmount = amount + interest; // This is the total amount the customer owes for this loan
+//       }
+//
+//       // For repayments, construct a helpful note and determine the loan kind from the selected loan
+//       if (_type == TransactionType.repayment) {
+//         note = 'Repayment for loan: ${_selectedLoan!.id}';
+//         loanKind = _selectedLoan!.loanKind; // Use the original loan's kind
+//       }
+//
+//       await appState.addTransaction(
+//         customerId: widget.customer.id,
+//         type: _type,
+//         loanKind: loanKind,
+//         amount: loanAmount,
+//         interestPercent: (_type == TransactionType.loan && _loanKind == "daily") ? _interestPercent : 0.0,
+//         date: DateTime.now().toIso8601String(),
+//         note: note,
+//       );
+//
+//       if (mounted) {
+//         // Go back to the previous page after saving
+//         Navigator.pop(context);
+//       }
+//     }
 
 
     return Scaffold(

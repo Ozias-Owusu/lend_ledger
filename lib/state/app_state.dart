@@ -1,4 +1,3 @@
-
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:lend_ledger/db/customers_dao.dart';
@@ -7,6 +6,7 @@ import 'package:lend_ledger/models/customer.dart';
 import 'package:lend_ledger/models/loan_record.dart';
 import 'package:lend_ledger/models/transactionRecord.dart';
 import 'package:uuid/uuid.dart';
+import 'package:local_auth/local_auth.dart';
 
 final _uuid = Uuid();
 
@@ -21,6 +21,43 @@ class AppState extends ChangeNotifier {
   bool isLoggedIn = false;
   String loggedInEmail = '';
   String loggedInUserName = '';
+  final LocalAuthentication auth =
+      LocalAuthentication(); // <-- Add this instance
+
+  Future<bool> areBiometricsEnabled() async {
+    final sp = await SharedPreferences.getInstance();
+    return sp.getBool('biometricsEnabled') ?? false;
+  }
+
+  // --- New method to perform biometric login ---
+  Future<bool> biometricLogin() async {
+    try {
+      final didAuthenticate = await auth.authenticate(
+        localizedReason: 'Please authenticate to log in',
+        biometricOnly: true,
+      );
+
+      if (didAuthenticate) {
+        // If successful, load the user's details from SharedPreferences
+        final sp = await SharedPreferences.getInstance();
+        loggedInEmail = sp.getString('registered_email') ?? '';
+        loggedInUserName = sp.getString('registered_name') ?? '';
+        isLoggedIn = true;
+
+        // Persist the session
+        await sp.setBool('isLoggedIn', true);
+        await sp.setString('loggedInEmail', loggedInEmail);
+        await sp.setString('loggedInUserName', loggedInUserName);
+
+        notifyListeners();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      print("Biometric login error: $e");
+      return false;
+    }
+  }
 
   // --- Core Data Loading and Auth State ---
   Future<void> loadFromDb() async {
@@ -212,8 +249,7 @@ class AppState extends ChangeNotifier {
   // --- Getter and Calculation Methods (operate on in-memory lists) ---
 
   List<TransactionRecord> transactionsForCustomer(String customerId) {
-    final list =
-    transactions.where((t) => t.customerId == customerId).toList();
+    final list = transactions.where((t) => t.customerId == customerId).toList();
     list.sort((a, b) => b.date.compareTo(a.date));
     return list;
   }
@@ -223,15 +259,17 @@ class AppState extends ChangeNotifier {
     final totalRepaid = customerTransactions
         .where((t) => t.type == TransactionType.repayment)
         .fold(0.0, (sum, t) => sum + t.amount);
-    final loans =
-    customerTransactions.where((t) => t.type == TransactionType.loan).toList();
+    final loans = customerTransactions
+        .where((t) => t.type == TransactionType.loan)
+        .toList();
     final List<LoanRecord> activeLoans = [];
     double repaymentsApplied = 0;
     for (final loan in loans.reversed) {
-      final totalOwedForThisLoan =
-          loan.amount ;
-      final applicableRepayment =
-      (totalRepaid - repaymentsApplied).clamp(0.0, totalOwedForThisLoan);
+      final totalOwedForThisLoan = loan.amount;
+      final applicableRepayment = (totalRepaid - repaymentsApplied).clamp(
+        0.0,
+        totalOwedForThisLoan,
+      );
       final remainingBalance = totalOwedForThisLoan - applicableRepayment;
       repaymentsApplied += applicableRepayment;
       if (remainingBalance > 0.01) {
@@ -270,8 +308,9 @@ class AppState extends ChangeNotifier {
     final todayDate =
         "${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}";
     return transactions
-        .where((t) =>
-    t.type == TransactionType.loan && t.date.startsWith(todayDate))
+        .where(
+          (t) => t.type == TransactionType.loan && t.date.startsWith(todayDate),
+        )
         .fold(0.0, (sum, t) => sum + t.amount);
   }
 

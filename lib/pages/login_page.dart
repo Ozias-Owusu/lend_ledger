@@ -18,6 +18,45 @@ class _LoginPageState extends State<LoginPage> {
   bool _loading = false;
   bool _isLogin = true;
   bool _showPassword = false;
+  bool _canUseBiometrics = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkBiometricStatus(); // <-- Check status when page loads
+  }
+
+  Future<void> _checkBiometricStatus() async {
+    final appState = Provider.of<AppState>(context, listen: false);
+    final canUse = await appState.areBiometricsEnabled();
+    if (mounted) {
+      setState(() {
+        _canUseBiometrics = canUse;
+      });
+    }
+  }
+  Future<void> _handleBiometricLogin() async {
+    setState(() => _loading = true);
+    final appState = Provider.of<AppState>(context, listen: false);
+    final success = await appState.biometricLogin();
+
+    if (!mounted) return;
+    setState(() => _loading = false);
+
+    if (success) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (c) => const DashboardPage()),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Biometric login failed or was canceled.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
 
   void _toggleFormType() {
     setState(() {
@@ -179,6 +218,25 @@ class _LoginPageState extends State<LoginPage> {
                           ),
                         ),
                       ),
+                      const SizedBox(height: 6),
+                      // --- Biometric Login Button ---
+                      if (_isLogin && _canUseBiometrics)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 16.0),
+                          child: OutlinedButton.icon(
+                            icon: const Icon(Icons.fingerprint),
+                            label: const Text('Login with Biometrics'),
+                            style: OutlinedButton.styleFrom(
+                              minimumSize: const Size(double.infinity, 50),
+                              foregroundColor: Colors.indigo,
+                              side: const BorderSide(color: Colors.indigo),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12.0),
+                              ),
+                            ),
+                            onPressed: _handleBiometricLogin,
+                          ),
+                        ),
                       const SizedBox(height: 16),
 
                       // --- Toggle Button ---
