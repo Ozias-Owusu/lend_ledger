@@ -39,6 +39,8 @@ class _ExportDataPageState extends State<ExportDataPage> {
   Customer? _selectedCustomer;
   bool _isExporting = false;
 
+  // In C:/Users/ooantwi/StudioProjects/Lend_Ledger/lib/pages/export_data_page.dart
+
   Future<void> _startExport() async {
     setState(() => _isExporting = true);
 
@@ -84,24 +86,41 @@ class _ExportDataPageState extends State<ExportDataPage> {
           setState(() => _isExporting = false);
           return;
         }
+
+        // --- *** THE FIX IS HERE *** ---
         headers = ['Date', 'Type', 'Amount', 'Balance'];
-        final customerTransactions =
-        appState.transactionsForCustomer(_selectedCustomer!.id);
-        double balance = appState.computeBalance(_selectedCustomer!.id);
-        dataRows = customerTransactions.map((t) {
+
+        // 1. Manually filter transactions for the selected customer
+        final customerTransactions = appState.transactions
+            .where((t) => t.customerId == _selectedCustomer!.id)
+            .toList();
+        // Sort by date to calculate balance correctly
+        customerTransactions.sort((a, b) => a.date.compareTo(b.date));
+
+        // 2. Calculate the final balance first
+        double finalBalance = 0;
+        for (final t in customerTransactions) {
+          finalBalance += (t.type == TransactionType.loan ? t.amount : -t.amount);
+        }
+
+        // 3. Generate rows with a running balance
+        dataRows = [];
+        double runningBalance = finalBalance;
+        for (final t in customerTransactions.reversed) { // Newest first for display
           final row = [
             t.date,
             t.type.name,
             t.amount,
-            balance.toStringAsFixed(2)
+            runningBalance.toStringAsFixed(2)
           ];
-          balance -= (t.type == TransactionType.loan
-              ? t.amount + (t.amount * t.interestPercent / 100)
-              : -t.amount);
-          return row;
-        }).toList();
+          dataRows.add(row);
+          runningBalance -= (t.type == TransactionType.loan ? t.amount : -t.amount);
+        }
+        // --- *** END OF FIX *** ---
         break;
     }
+
+    // ... (The rest of the function for generating and opening files is fine)
 
     // 2. Generate file bytes based on format
     Uint8List fileBytes;
@@ -147,6 +166,116 @@ class _ExportDataPageState extends State<ExportDataPage> {
       }
     }
   }
+
+
+  // Future<void> _startExport() async {
+  //   setState(() => _isExporting = true);
+  //
+  //   final appState = Provider.of<AppState>(context, listen: false);
+  //   List<List<dynamic>> dataRows;
+  //   List<String> headers;
+  //
+  //   // 1. Prepare data based on user selection
+  //   switch (_selectedDataType) {
+  //     case ExportDataType.allCustomers:
+  //       headers = ['ID', 'Name', 'Phone', 'Ghana Card', 'Date Joined'];
+  //       dataRows = appState.customers
+  //           .map((c) =>
+  //       [c.id, c.name, c.phone, c.ghanaCardNumber, c.dateJoined])
+  //           .toList();
+  //       break;
+  //     case ExportDataType.allTransactions:
+  //       headers = [
+  //         'ID',
+  //         'Customer ID',
+  //         'Type',
+  //         'Amount',
+  //         'Interest %',
+  //         'Date',
+  //         'Note'
+  //       ];
+  //       dataRows = appState.transactions
+  //           .map((t) => [
+  //         t.id,
+  //         t.customerId,
+  //         t.type.name,
+  //         t.amount,
+  //         t.interestPercent,
+  //         t.date,
+  //         t.note
+  //       ])
+  //           .toList();
+  //       break;
+  //     case ExportDataType.singleCustomerLedger:
+  //       if (_selectedCustomer == null) {
+  //         ScaffoldMessenger.of(context).showSnackBar(
+  //             const SnackBar(content: Text('Please select a customer first.')));
+  //         setState(() => _isExporting = false);
+  //         return;
+  //       }
+  //       headers = ['Date', 'Type', 'Amount', 'Balance'];
+  //       final customerTransactions =
+  //       appState.transactionsForCustomer(_selectedCustomer!.id);
+  //       double balance = appState.computeBalance(_selectedCustomer!.id);
+  //       dataRows = customerTransactions.map((t) {
+  //         final row = [
+  //           t.date,
+  //           t.type.name,
+  //           t.amount,
+  //           balance.toStringAsFixed(2)
+  //         ];
+  //         balance -= (t.type == TransactionType.loan
+  //             ? t.amount + (t.amount * t.interestPercent / 100)
+  //             : -t.amount);
+  //         return row;
+  //       }).toList();
+  //       break;
+  //   }
+  //
+  //   // 2. Generate file bytes based on format
+  //   Uint8List fileBytes;
+  //   String fileExtension = _selectedFormat.name;
+  //
+  //   switch (_selectedFormat) {
+  //     case ExportFormat.pdf:
+  //       fileBytes = await _createPdf(headers, dataRows);
+  //       break;
+  //     case ExportFormat.excel:
+  //       fileBytes = await _createExcel(headers, dataRows);
+  //       fileExtension = 'xlsx'; // excel package creates .xlsx files
+  //       break;
+  //     case ExportFormat.csv:
+  //       fileBytes = await _createCsv(headers, dataRows);
+  //       break;
+  //   }
+  //
+  //   // 3. Get path, save file, and open it
+  //   try {
+  //     final directory = await getApplicationDocumentsDirectory();
+  //     final path =
+  //         '${directory.path}/export_${DateTime.now().millisecondsSinceEpoch}.$fileExtension';
+  //     final file = File(path);
+  //     await file.writeAsBytes(fileBytes);
+  //
+  //     // 4. Use open_filex to open the file
+  //     final result = await OpenFilex.open(path);
+  //     if (result.type != ResultType.done) {
+  //       if (mounted) {
+  //         ScaffoldMessenger.of(context).showSnackBar(
+  //             SnackBar(content: Text('Could not open file: ${result.message}')));
+  //       }
+  //     }
+  //   } catch (e) {
+  //     if (mounted) {
+  //       ScaffoldMessenger.of(context).showSnackBar(
+  //           SnackBar(content: Text('Failed to export file: $e')));
+  //     }
+  //   } finally {
+  //     if (mounted) {
+  //       setState(() => _isExporting = false);
+  //     }
+  //   }
+  // }
 
   // *** FIX IS HERE: The return type is Future<Uint8List> ***
   Future<Uint8List> _createPdf(

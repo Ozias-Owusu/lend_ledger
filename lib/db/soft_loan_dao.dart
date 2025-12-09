@@ -13,5 +13,17 @@ class SoftLoanDao {
     );
   }
 
-// You can add methods here later to get details if needed
+  Future<SoftLoanDetails?> getSoftLoanDetails(String transactionId) async {
+    final db = await DatabaseHelper.instance.database;
+    final result = await db.query(
+      DatabaseHelper.tableSoftLoans,
+      where: "${DatabaseHelper.columnTransactionId} = ?",
+      whereArgs: [transactionId],
+    );
+
+    if (result.isNotEmpty) {
+      return SoftLoanDetails.fromJson(result.first);
+    }
+    return null;
+  }
 }

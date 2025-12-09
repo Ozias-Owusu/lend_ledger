@@ -1,5 +1,5 @@
 import 'package:lend_ledger/models/transactionRecord.dart';
-
+import 'installment.dart';
 class LoanRecord {
   String id;
   String customerId;
@@ -10,6 +10,7 @@ class LoanRecord {
   String date;
   String note;
   double remainingAmount;
+  List<Installment> installments;
 
   bool get isOverdue {
     final loanDate = DateTime.tryParse(date);
@@ -29,6 +30,7 @@ class LoanRecord {
     required this.date,
     required this.note,
     required this.remainingAmount,
+    this.installments = const [],
   });
 
   // Factory constructor to create a LoanRecord from a TransactionRecord
