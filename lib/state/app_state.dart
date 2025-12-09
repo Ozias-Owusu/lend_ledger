@@ -254,30 +254,71 @@ class AppState extends ChangeNotifier {
     return list;
   }
 
+  // In C:/Users/ooantwi/StudioProjects/Lend_Ledger/lib/state/app_state.dart
+
   List<LoanRecord> getCustomerLoans(String customerId) {
     final customerTransactions = transactionsForCustomer(customerId);
-    final totalRepaid = customerTransactions
-        .where((t) => t.type == TransactionType.repayment)
-        .fold(0.0, (sum, t) => sum + t.amount);
-    final loans = customerTransactions
-        .where((t) => t.type == TransactionType.loan)
-        .toList();
+
+    // 1. Separate loans and repayments into two lists
+    final loans = customerTransactions.where((t) => t.type == TransactionType.loan).toList();
+    final repayments = customerTransactions.where((t) => t.type == TransactionType.repayment).toList();
+
+    // 2. Create a map to store total repayments for each specific loan ID
+    final Map<String, double> repaymentsByLoanId = {};
+    for (final repayment in repayments) {
+      // Extract the loan ID from the note, e.g., "Repayment for loan: [ID]"
+      final noteParts = repayment.note.split(':');
+      if (noteParts.length == 2) {
+        final loanId = noteParts[1].trim();
+        // Add the repayment amount to the total for that loan ID
+        repaymentsByLoanId[loanId] = (repaymentsByLoanId[loanId] ?? 0) + repayment.amount;
+      }
+    }
+
+    // 3. Create the final list of active loans
     final List<LoanRecord> activeLoans = [];
-    double repaymentsApplied = 0;
-    for (final loan in loans.reversed) {
-      final totalOwedForThisLoan = loan.amount;
-      final applicableRepayment = (totalRepaid - repaymentsApplied).clamp(
-        0.0,
-        totalOwedForThisLoan,
-      );
-      final remainingBalance = totalOwedForThisLoan - applicableRepayment;
-      repaymentsApplied += applicableRepayment;
-      if (remainingBalance > 0.01) {
+
+    for (final loan in loans) {
+      final totalOwedForThisLoan = loan.amount; // This is already principal + interest
+      final totalRepaidForThisLoan = repaymentsByLoanId[loan.id] ?? 0.0;
+
+      final remainingBalance = totalOwedForThisLoan - totalRepaidForThisLoan;
+
+      // 4. If there's still a balance on this loan, it's active.
+      if (remainingBalance > 0.01) { // Use an epsilon for floating point issues
         activeLoans.add(LoanRecord.fromTransaction(loan, remainingBalance));
       }
     }
-    return activeLoans.reversed.toList();
+
+    // 5. Return the list of active loans, showing newest first.
+    return activeLoans;
   }
+
+
+  // List<LoanRecord> getCustomerLoans(String customerId) {
+  //   final customerTransactions = transactionsForCustomer(customerId);
+  //   final totalRepaid = customerTransactions
+  //       .where((t) => t.type == TransactionType.repayment)
+  //       .fold(0.0, (sum, t) => sum + t.amount);
+  //   final loans = customerTransactions
+  //       .where((t) => t.type == TransactionType.loan)
+  //       .toList();
+  //   final List<LoanRecord> activeLoans = [];
+  //   double repaymentsApplied = 0;
+  //   for (final loan in loans.reversed) {
+  //     final totalOwedForThisLoan = loan.amount;
+  //     final applicableRepayment = (totalRepaid - repaymentsApplied).clamp(
+  //       0.0,
+  //       totalOwedForThisLoan,
+  //     );
+  //     final remainingBalance = totalOwedForThisLoan - applicableRepayment;
+  //     repaymentsApplied += applicableRepayment;
+  //     if (remainingBalance > 0.01) {
+  //       activeLoans.add(LoanRecord.fromTransaction(loan, remainingBalance));
+  //     }
+  //   }
+  //   return activeLoans.reversed.toList();
+  // }
 
   double computeBalance(String customerId) {
     double balance = 0.0;

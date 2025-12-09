@@ -226,7 +226,9 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
 
   String _formatLoanDisplay(LoanRecord loan) {
     final currencySymbol = 'GHS';
-    final loanBalance = loan.amount;
+    // *** THE FIX IS HERE ***
+    // Use the calculated remainingAmount from the LoanRecord object
+    final loanBalance = loan.remainingAmount;
 
     final loanDate = DateTime.tryParse(loan.date);
     final formattedDate = loanDate != null
@@ -235,8 +237,24 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
 
     final status = loan.isOverdue ? ' (Overdue)' : '';
 
+    // This will now display the correct remaining balance
     return '$currencySymbol${loanBalance.toStringAsFixed(2)} - Due: $formattedDate$status';
   }
+
+
+  // String _formatLoanDisplay(LoanRecord loan) {
+  //   final currencySymbol = 'GHS';
+  //   final loanBalance = loan.amount;
+  //
+  //   final loanDate = DateTime.tryParse(loan.date);
+  //   final formattedDate = loanDate != null
+  //       ? "${loanDate.day}/${loanDate.month}/${loanDate.year}"
+  //       : "Unknown Date";
+  //
+  //   final status = loan.isOverdue ? ' (Overdue)' : '';
+  //
+  //   return '$currencySymbol${loanBalance.toStringAsFixed(2)} - Due: $formattedDate$status';
+  // }
 
   @override
   Widget build(BuildContext context) {
