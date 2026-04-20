@@ -528,8 +528,8 @@ class _CustomerLedgerPageState extends State<CustomerLedgerPage> {
             child: const Icon(Icons.calendar_today),
             label: "Daily Loan",
             backgroundColor: Colors.redAccent,
-            onTap: () {
-              Navigator.push(
+            onTap: () async {
+              await Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (_) => AddTransactionPage(
@@ -539,14 +539,20 @@ class _CustomerLedgerPageState extends State<CustomerLedgerPage> {
                   ),
                 ),
               );
+              if (!mounted) return;
+              setState(() {
+                _customerFuture = context
+                    .read<AppState>()
+                    .fetchCustomerDetailsFromApi(widget.customer.id);
+              });
             },
           ),
           SpeedDialChild(
             child: const Icon(Icons.handshake),
             label: "Soft Loan",
             backgroundColor: Colors.orange,
-            onTap: () {
-              Navigator.push(
+            onTap: () async {
+              await Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (_) => AddTransactionPage(
@@ -556,14 +562,20 @@ class _CustomerLedgerPageState extends State<CustomerLedgerPage> {
                   ),
                 ),
               );
+              if (!mounted) return;
+              setState(() {
+                _customerFuture = context
+                    .read<AppState>()
+                    .fetchCustomerDetailsFromApi(widget.customer.id);
+              });
             },
           ),
           SpeedDialChild(
             child: const Icon(Icons.arrow_upward),
             label: "Repayment",
             backgroundColor: Colors.green,
-            onTap: () {
-              Navigator.push(
+            onTap: () async {
+              await Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (_) => AddTransactionPage(
@@ -572,6 +584,12 @@ class _CustomerLedgerPageState extends State<CustomerLedgerPage> {
                   ),
                 ),
               );
+              if (!mounted) return;
+              setState(() {
+                _customerFuture = context
+                    .read<AppState>()
+                    .fetchCustomerDetailsFromApi(widget.customer.id);
+              });
             },
           ),
         ],

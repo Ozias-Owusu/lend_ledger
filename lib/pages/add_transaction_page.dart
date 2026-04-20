@@ -2,12 +2,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
-import 'package:lend_ledger/db/soft_loan_dao.dart';
 import 'package:lend_ledger/models/customer.dart';
 import 'package:lend_ledger/models/installment.dart';
 import 'package:lend_ledger/models/loan_record.dart';
-import 'package:lend_ledger/models/soft_loan_details.dart';
 import 'package:lend_ledger/models/transactionRecord.dart';
+import 'package:lend_ledger/services/daily_loans_api_service.dart';
+import 'package:lend_ledger/services/repayments_api_service.dart';
+import 'package:lend_ledger/services/soft_loans_api_service.dart';
 import 'package:provider/provider.dart';
 import '../state/app_state.dart';
 
@@ -46,6 +47,10 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
   List<LoanRecord> _customerLoans = [];
   double _outstandingBalance = 0.0;
   Installment? _selectedInstallment;
+  final DailyLoansApiService _dailyLoansApiService = DailyLoansApiService();
+  final SoftLoansApiService _softLoansApiService = SoftLoansApiService();
+  final RepaymentsApiService _repaymentsApiService = RepaymentsApiService();
+  bool _isPostingRepayment = false;
 
   @override
   void initState() {
@@ -77,17 +82,90 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
 
   Future<void> _loadCustomerLoans() async {
     final appState = Provider.of<AppState>(context, listen: false);
-    // Use await to get the Future<List<LoanRecord>>
-    final loans = await appState.getCustomerLoans(widget.customer.id);
-    double totalBalance = loans.fold(0.0, (sum, loan) => sum + loan.remainingAmount);
+    try {
+      final customerDetails = await appState.fetchCustomerDetailsFromApi(
+        widget.customer.id,
+      );
+      final repayments = await _repaymentsApiService.fetchRepaymentsByCustomer(
+        widget.customer.id,
+      );
+      final Map<String, double> paidByLoanId = {};
 
-    setState(() {
-      _customerLoans = loans;
-      _outstandingBalance = totalBalance;
-      if (_customerLoans.isNotEmpty && _selectedLoan == null) {
-        _selectLoan(_customerLoans.first);
+      for (final repayment in repayments) {
+        final loanId = (repayment['loanId'] ?? '').toString();
+        if (loanId.isEmpty) continue;
+        final amountPaid = _num(repayment['amountPaid']);
+        paidByLoanId[loanId] = (paidByLoanId[loanId] ?? 0.0) + amountPaid;
       }
-    });
+
+      final List<LoanRecord> loans = [];
+      for (final loan in customerDetails.dailyLoans) {
+        final loanId = (loan['id'] ?? '').toString();
+        if (loanId.isEmpty) continue;
+        final total = _num(loan['totalRepayableAmount']);
+        final remaining = total - (paidByLoanId[loanId] ?? 0.0);
+        if (remaining <= 0.01) continue;
+
+        loans.add(
+          LoanRecord(
+            id: loanId,
+            customerId: widget.customer.id,
+            type: TransactionType.loan,
+            loanKind: 'daily',
+            amount: total,
+            interestPercent: _num(loan['interestRate']) * 100,
+            date: (loan['loanDate'] ?? DateTime.now().toIso8601String())
+                .toString(),
+            note: (loan['notes'] ?? '').toString(),
+            remainingAmount: remaining,
+          ),
+        );
+      }
+
+      for (final loan in customerDetails.softLoans) {
+        final loanId = (loan['id'] ?? '').toString();
+        if (loanId.isEmpty) continue;
+        final total = _num(loan['totalRepayableAmount']);
+        final remaining = total - (paidByLoanId[loanId] ?? 0.0);
+        if (remaining <= 0.01) continue;
+
+        loans.add(
+          LoanRecord(
+            id: loanId,
+            customerId: widget.customer.id,
+            type: TransactionType.loan,
+            loanKind: 'soft',
+            amount: total,
+            interestPercent: _num(loan['interestRate']) * 100,
+            date:
+                (loan['loanStartDate'] ?? DateTime.now().toIso8601String())
+                    .toString(),
+            note: (loan['notes'] ?? '').toString(),
+            remainingAmount: remaining,
+          ),
+        );
+      }
+
+      loans.sort((a, b) => b.date.compareTo(a.date));
+      final totalBalance = loans.fold<double>(
+        0.0,
+        (sum, loan) => sum + loan.remainingAmount,
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _customerLoans = loans;
+        _outstandingBalance = totalBalance;
+        if (_customerLoans.isNotEmpty && _selectedLoan == null) {
+          _selectLoan(_customerLoans.first);
+        }
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Unable to load loans: $e")),
+      );
+    }
   }
 
   void _selectLoan(LoanRecord loan) {
@@ -100,6 +178,7 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
 
   // --- SAVE TRANSACTION ---
   Future<void> _saveTransaction() async {
+    if (_isPostingRepayment) return;
     final amount = double.tryParse(_amountCtl.text);
     if (amount == null || amount <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please enter a valid amount.")));
@@ -126,6 +205,123 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
     }
 
     final appState = Provider.of<AppState>(context, listen: false);
+
+    if (_type == TransactionType.repayment) {
+      final now = DateTime.now();
+      final selected = _selectedLoan!;
+      final installmentNumber = _selectedInstallment == null
+          ? 0
+          : (selected.installments.indexWhere(
+                    (i) => i.dueDate == _selectedInstallment!.dueDate,
+                  ) +
+                  1);
+      try {
+        setState(() => _isPostingRepayment = true);
+        await _repaymentsApiService.createRepayment(
+          customerId: widget.customer.id,
+          loanType: _apiLoanType(selected.loanKind),
+          loanId: selected.id,
+          amountPaid: amount,
+          paymentDateIso: now.toIso8601String(),
+          installmentNumber: installmentNumber < 0 ? 0 : installmentNumber,
+          notes: _selectedInstallment == null
+              ? 'Repayment for loan ${selected.id}'
+              : 'Installment repayment for loan ${selected.id}',
+        );
+
+        await appState.loadCustomersFromApi();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Repayment saved successfully.")),
+          );
+          Navigator.pop(context);
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("Failed to save repayment: $e")),
+          );
+        }
+      } finally {
+        if (mounted) {
+          setState(() => _isPostingRepayment = false);
+        }
+      }
+      return;
+    }
+
+    if (_type == TransactionType.loan && _loanKind == 'daily') {
+      final transactionId = appState.generateUUID();
+      final now = DateTime.now();
+      final interestRateDecimal = _interestPercent / 100;
+      final interestAmount = amount * interestRateDecimal;
+      final totalRepayableAmount = amount + interestAmount;
+
+      try {
+        await _dailyLoansApiService.createDailyLoan(
+          id: transactionId,
+          customerId: widget.customer.id,
+          principalAmount: amount,
+          interestRateDecimal: interestRateDecimal,
+          interestAmount: interestAmount,
+          totalRepayableAmount: totalRepayableAmount,
+          loanDateIso: now.toIso8601String(),
+          dueDateIso: now.add(const Duration(days: 1)).toIso8601String(),
+          status: 'Active',
+          notes: '',
+        );
+
+        await appState.loadCustomersFromApi();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Daily loan created successfully.")),
+          );
+          Navigator.pop(context);
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("Failed to create daily loan: $e")),
+          );
+        }
+      }
+      return;
+    }
+
+    if (_type == TransactionType.loan && _loanKind == 'soft') {
+      final now = DateTime.now();
+      final durationValue = int.tryParse(_durationCtl.text) ?? 1;
+      final safeDuration = durationValue <= 0 ? 1 : durationValue;
+      final interestRateDecimal = _interestPercent / 100;
+
+      try {
+        await _softLoansApiService.createSoftLoan(
+          customerId: widget.customer.id,
+          principalAmount: amount,
+          interestRateDecimal: interestRateDecimal,
+          durationValue: safeDuration,
+          durationUnit: _durationUnitLabel(_durationUnit),
+          loanStartDateIso: now.toIso8601String(),
+          notes: '',
+        );
+
+        await appState.loadCustomersFromApi();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Soft loan created successfully.")),
+          );
+          Navigator.pop(context);
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("Failed to create soft loan: $e")),
+          );
+        }
+      }
+      return;
+    }
+
     final String transactionId = appState.generateUUID();
     String note = '';
     double finalAmount = amount;
@@ -133,34 +329,11 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
 
     if (_type == TransactionType.loan) {
       final principal = amount;
-      double totalInterest;
-
-      // Multiply interest by duration for soft loans
-      if (_loanKind == 'soft') {
-        final durationValue = int.tryParse(_durationCtl.text) ?? 1;
-        totalInterest = principal * (_interestPercent / 100) * durationValue;
-      } else { // Daily Loan
-        totalInterest = principal * (_interestPercent / 100);
-      }
+      final totalInterest = principal * (_interestPercent / 100);
 
       final totalRepayable = principal + totalInterest;
       finalAmount = totalRepayable;
       interestToSave = _interestPercent;
-
-      if (_loanKind == 'soft') {
-        final durationValue = int.tryParse(_durationCtl.text) ?? 1;
-        final softLoanDetails = SoftLoanDetails(
-          transactionId: transactionId,
-          principalAmount: principal,
-          interestRate: _interestPercent,
-          totalRepayable: totalRepayable,
-          installmentAmount: totalRepayable / durationValue,
-          loanDuration: '$durationValue ${_durationUnit.name}',
-          loanEndDate: _calculateEndDate(durationValue, _durationUnit),
-        );
-        await SoftLoanDao().insertSoftLoanDetails(softLoanDetails);
-        note = 'Soft Loan - details in soft_loans table';
-      }
     } else { // Repayment logic
       note = 'Repayment for loan: ${_selectedLoan!.id}';
     }
@@ -192,6 +365,23 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
         break;
     }
     return DateFormat('dd MMM, yyyy').format(DateTime.now().add(duration));
+  }
+
+  String _durationUnitLabel(DurationUnit unit) {
+    switch (unit) {
+      case DurationUnit.days:
+        return 'Days';
+      case DurationUnit.weeks:
+        return 'Weeks';
+      case DurationUnit.months:
+        return 'Months';
+    }
+  }
+
+  String _apiLoanType(String loanKind) {
+    final normalized = loanKind.toLowerCase();
+    if (normalized.contains('soft')) return 'Soft';
+    return 'Daily';
   }
 
   @override
@@ -385,9 +575,20 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: (_customerLoans.isEmpty && isRepayment) ? null : _saveTransaction,
-        icon: const Icon(Icons.save),
-        label: const Text("Save Transaction"),
+        onPressed: (_customerLoans.isEmpty && isRepayment) || _isPostingRepayment
+            ? null
+            : _saveTransaction,
+        icon: _isPostingRepayment
+            ? const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              )
+            : const Icon(Icons.save),
+        label: Text(_isPostingRepayment ? "Posting..." : "Save Transaction"),
       ),
     );
   }
@@ -454,12 +655,57 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                   itemCount: _customerLoans.length,
                   itemBuilder: (context, index) {
                     final loan = _customerLoans[index];
-                    return ListTile(
-                      title: Text(_formatLoanDisplay(loan)),
-                      onTap: () {
-                        _selectLoan(loan);
-                        Navigator.pop(context);
-                      },
+                    final selected = _selectedLoan?.id == loan.id;
+                    final isSoft = loan.loanKind.toLowerCase() == 'soft';
+                    final loanDate = DateTime.tryParse(loan.date);
+                    final formattedDate = loanDate != null
+                        ? DateFormat('dd MMM yyyy').format(loanDate)
+                        : "Unknown date";
+
+                    return Card(
+                      elevation: selected ? 4 : 1,
+                      color: selected ? Colors.indigo.shade50 : Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: BorderSide(
+                          color: selected
+                              ? Colors.indigo
+                              : Colors.grey.shade300,
+                        ),
+                      ),
+                      child: ListTile(
+                        leading: CircleAvatar(
+                          backgroundColor: isSoft
+                              ? Colors.orange.shade100
+                              : Colors.red.shade100,
+                          child: Icon(
+                            isSoft ? Icons.handshake : Icons.calendar_today,
+                            color: isSoft
+                                ? Colors.orange.shade700
+                                : Colors.red.shade700,
+                            size: 18,
+                          ),
+                        ),
+                        title: Text(
+                          '${loan.loanKind.toUpperCase()} LOAN',
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        subtitle: Text(
+                          'Balance: GHS ${loan.remainingAmount.toStringAsFixed(2)}\nDate: $formattedDate',
+                        ),
+                        trailing: Text(
+                          'GHS ${loan.remainingAmount.toStringAsFixed(2)}',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.indigo,
+                          ),
+                        ),
+                        isThreeLine: true,
+                        onTap: () {
+                          _selectLoan(loan);
+                          Navigator.pop(context);
+                        },
+                      ),
                     );
                   },
                 ),
@@ -478,6 +724,11 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
     final formattedDate = loanDate != null ? DateFormat('dd/MM/yyyy').format(loanDate) : "Unknown Date";
     final status = loan.isOverdue ? ' (Overdue)' : '';
     return '${loan.loanKind.toUpperCase()}: $currencySymbol${loanBalance.toStringAsFixed(2)} - Due: $formattedDate$status';
+  }
+
+  double _num(dynamic value) {
+    if (value is num) return value.toDouble();
+    return double.tryParse('$value') ?? 0.0;
   }
 
   Widget _summaryRow(String label, String value) {
