@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
@@ -29,9 +31,13 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
   String? _ghanaCardBackPath;
   String? _licenseFrontPath;
   String? _licenseBackPath;
+  String? _profilePicturePath;
 
   final picker = ImagePicker();
   bool get isEditMode => widget.customerToEdit != null;
+  String _countryCode = '+233';
+  String _localPhoneNumber = '';
+  bool _isSaving = false;
 
   @override
   void initState() {
@@ -54,6 +60,10 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
       _ghanaCardBackPath = customer?.ghanaCardBackImage;
       _licenseFrontPath = customer?.licenseFrontImage;
       _licenseBackPath = customer?.licenseBackImage;
+      _profilePicturePath = customer?.profilePicture;
+      final phoneParts = _extractPhoneParts(customer?.phone ?? '');
+      _countryCode = phoneParts.$1;
+      _localPhoneNumber = phoneParts.$2;
     }
   }
 
@@ -98,43 +108,82 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
 
   Future<void> _saveCustomer() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_isSaving) return;
 
     final state = Provider.of<AppState>(context, listen: false);
+    setState(() => _isSaving = true);
 
-    if (isEditMode) {
-      await state.updateCustomer(
-        id: widget.customerToEdit!.id,
-        name: _nameCtl.text,
-        phone: _phoneCtl.text,
-        ghanaCardNumber: _ghanaCardController.text,
-        licenseIdNumber: _licenseController.text,
-        dateJoined: _dateCtl.text,
-        loanType: widget.customerToEdit!.loanType,
-        ghanaCardFrontImage: _ghanaCardFrontPath,
-        ghanaCardBackImage: _ghanaCardBackPath,
-        licenseFrontImage: _licenseFrontPath,
-        licenseBackImage: _licenseBackPath,
-        vehicle: '', // vehicle is deprecated but required by the function
-      );
-    } else {
-      await state.addCustomer(
-        name: _nameCtl.text,
-        phone: _phoneCtl.text,
-        dateJoined: _dateCtl.text,
-        ghanaCardNumber: _ghanaCardController.text,
-        licenseIdNumber: _licenseController.text,
-        loanType: 'daily', // Default value
-        ghanaCardFrontImage: _ghanaCardFrontPath,
-        ghanaCardBackImage: _ghanaCardBackPath,
-        licenseFrontImage: _licenseFrontPath,
-        licenseBackImage: _licenseBackPath,
-        vehicle: '', // vehicle is deprecated
-      );
-    }
+    try {
+      final parsedPhone = _extractPhoneParts(_phoneCtl.text.trim());
+      final countryCodeToSend = _countryCode.isNotEmpty
+          ? _countryCode
+          : parsedPhone.$1;
+      final localPhoneToSend = _localPhoneNumber.isNotEmpty
+          ? _localPhoneNumber
+          : parsedPhone.$2;
 
-    if (mounted) {
-      Navigator.pop(context);
+      if (isEditMode) {
+        final existing = widget.customerToEdit!;
+        await state.updateCustomerInApi(
+          id: existing.id,
+          fullName: _nameCtl.text.trim(),
+          countryCode: countryCodeToSend,
+          phoneNumber: localPhoneToSend,
+          ghanaCardNumber: _ghanaCardController.text.trim(),
+          licenseIdNumber: _licenseController.text.trim(),
+          ghanaCardImagePath: _ghanaCardFrontPath ?? _ghanaCardBackPath,
+          licenseIdImagePath: _licenseFrontPath ?? _licenseBackPath,
+          profilePicturePath: _profilePicturePath,
+          dailyLoans: existing.dailyLoans,
+          softLoans: existing.softLoans,
+        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Customer updated successfully.')),
+          );
+          Navigator.pop(context);
+        }
+        return;
+      }
+
+      await state.addCustomerToApi(
+        fullName: _nameCtl.text.trim(),
+        countryCode: countryCodeToSend,
+        phoneNumber: localPhoneToSend,
+        ghanaCardNumber: _ghanaCardController.text.trim(),
+        licenseIdNumber: _licenseController.text.trim(),
+        ghanaCardImagePath: _ghanaCardFrontPath ?? _ghanaCardBackPath,
+        licenseIdImagePath: _licenseFrontPath ?? _licenseBackPath,
+        profilePicturePath: _profilePicturePath,
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Customer created successfully.')),
+        );
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to create customer: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
     }
+  }
+
+  (String, String) _extractPhoneParts(String completePhone) {
+    if (completePhone.isEmpty) return ('+233', '');
+    if (!completePhone.startsWith('+')) return (_countryCode, completePhone);
+    final match = RegExp(r'^\+\d{1,4}').firstMatch(completePhone);
+    if (match == null) return (_countryCode, completePhone);
+    final code = match.group(0) ?? _countryCode;
+    final number = completePhone.substring(code.length);
+    return (code, number);
   }
 
   @override
@@ -152,6 +201,36 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Full Name
+              Center(
+                child: Column(
+                  children: [
+                    _buildProfileAvatar(),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: _pickProfileFromCamera,
+                            icon: const Icon(Icons.camera_alt),
+                            label: const Text('Capture Profile'),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: _pickProfileFromGallery,
+                            icon: const Icon(Icons.upload),
+                            label: const Text('Upload Profile'),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                ),
+              ),
+
               // Full Name
               TextFormField(
                 controller: _nameCtl,
@@ -173,6 +252,8 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
                 initialValue: widget.customerToEdit?.phone,
                 onChanged: (phone) {
                   _phoneCtl.text = phone.completeNumber;
+                  _countryCode = phone.countryCode;
+                  _localPhoneNumber = phone.number;
                 },
               ),
               const SizedBox(height: 16),
@@ -223,7 +304,7 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
                 child: ElevatedButton.icon(
                   icon: const Icon(Icons.save),
                   label: Text(isEditMode ? 'Update Customer' : 'Save Customer'),
-                  onPressed: _saveCustomer,
+                  onPressed: _isSaving ? null : _saveCustomer,
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.all(20),
                     textStyle: const TextStyle(fontSize: 18),
@@ -316,6 +397,93 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
     });
   }
 
+  Future<void> _pickProfileFromCamera() async {
+    final image = await picker.pickImage(source: ImageSource.camera);
+    if (image == null || !mounted) return;
+    setState(() => _profilePicturePath = image.path);
+  }
+
+  Future<void> _pickProfileFromGallery() async {
+    final image = await picker.pickImage(source: ImageSource.gallery);
+    if (image == null || !mounted) return;
+    setState(() => _profilePicturePath = image.path);
+  }
+
+  Widget _buildProfileAvatar() {
+    final file = _profileFileOrNull();
+    if (file != null) {
+      return ClipOval(
+        child: SizedBox(
+          width: 80,
+          height: 80,
+          child: Image.file(
+            file,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => _buildProfileInitialAvatar(),
+          ),
+        ),
+      );
+    }
+
+    final bytes = _profileBytesOrNull();
+    if (bytes != null) {
+      return ClipOval(
+        child: SizedBox(
+          width: 80,
+          height: 80,
+          child: Image.memory(
+            bytes,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => _buildProfileInitialAvatar(),
+          ),
+        ),
+      );
+    }
+
+    return _buildProfileInitialAvatar();
+  }
+
+  Widget _buildProfileInitialAvatar() {
+    return CircleAvatar(
+      radius: 40,
+      backgroundColor: Colors.grey.shade400,
+      child: Text(
+        _initialFromName(),
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.bold,
+          fontSize: 28,
+        ),
+      ),
+    );
+  }
+
+  File? _profileFileOrNull() {
+    final value = _profilePicturePath;
+    if (value == null || value.isEmpty) return null;
+    final file = File(value);
+    if (file.existsSync()) {
+      return file;
+    }
+    return null;
+  }
+
+  Uint8List? _profileBytesOrNull() {
+    final value = _profilePicturePath;
+    if (value == null || value.isEmpty) return null;
+    try {
+      return Uint8List.fromList(base64Decode(value));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String _initialFromName() {
+    final trimmed = _nameCtl.text.trim();
+    if (trimmed.isEmpty) return '?';
+    return trimmed[0].toUpperCase();
+  }
+
 
 
   // Widget _buildIdCaptureSection({
@@ -370,7 +538,7 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
             ),
             clipBehavior: Clip.antiAlias,
             child: valid
-                ? Image.file(File(imagePath!), fit: BoxFit.cover)
+                ? Image.file(File(imagePath), fit: BoxFit.cover)
                 : const Center(
               child: Icon(Icons.image_not_supported_outlined,
                   color: Colors.grey, size: 40),

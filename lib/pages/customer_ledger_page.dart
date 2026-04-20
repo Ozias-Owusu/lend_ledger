@@ -347,160 +347,173 @@
 // }
 //
 
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_speed_dial/flutter_speed_dial.dart';
+import 'package:intl/intl.dart';
 import 'package:lend_ledger/models/customer.dart';
 import 'package:lend_ledger/models/transactionRecord.dart';
 import 'package:provider/provider.dart';
+
 import '../state/app_state.dart';
-import 'package:intl/intl.dart';
 import 'add_transaction_page.dart';
 
-class CustomerLedgerPage extends StatelessWidget {
+class CustomerLedgerPage extends StatefulWidget {
   final Customer customer;
 
   const CustomerLedgerPage({super.key, required this.customer});
 
   @override
+  State<CustomerLedgerPage> createState() => _CustomerLedgerPageState();
+}
+
+class _CustomerLedgerPageState extends State<CustomerLedgerPage> {
+  late Future<Customer> _customerFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _customerFuture = context
+        .read<AppState>()
+        .fetchCustomerDetailsFromApi(widget.customer.id);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final state = Provider.of<AppState>(context);
-
-    // --- FIX IS HERE: Manually filter and calculate data ---
-    // 1. Get all transactions for this specific customer from the main list.
-    final transactions = state.transactions
-        .where((t) => t.customerId == customer.id)
-        .toList();
-    // Sort them by date, newest first.
-    transactions.sort((a, b) => b.date.compareTo(a.date));
-
-    // 2. Calculate borrowed, repaid, and balance locally.
-    double borrowed = 0;
-    double repaid = 0;
-    double balance = 0;
-
-    for (final t in transactions) {
-      if (t.type == TransactionType.loan) {
-        borrowed += t.amount;
-        balance += t.amount;
-      } else {
-        repaid += t.amount;
-        balance -= t.amount;
-      }
-    }
-    // Ensure balance doesn't show as negative.
-    balance = balance > 0.01 ? balance : 0.0;
-    // --- END OF FIX ---
-
     return Scaffold(
-      appBar: AppBar(
-        title: Text(customer.name),
-      ),
-
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(20),
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(18),
-                boxShadow: [
-                  BoxShadow(
-                      color: Colors.black12,
-                      blurRadius: 8,
-                      offset: const Offset(0, 2))
-                ],
+      appBar: AppBar(title: Text(widget.customer.name)),
+      body: FutureBuilder<Customer>(
+        future: _customerFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Text(
+                      'Unable to load customer details.',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 8),
+                    Text('${snapshot.error}', textAlign: TextAlign.center),
+                    const SizedBox(height: 12),
+                    ElevatedButton(
+                      onPressed: () {
+                        setState(() {
+                          _customerFuture = context
+                              .read<AppState>()
+                              .fetchCustomerDetailsFromApi(widget.customer.id);
+                        });
+                      },
+                      child: const Text('Retry'),
+                    ),
+                  ],
+                ),
               ),
+            );
+          }
+
+          final customer = snapshot.data!;
+          final items = _buildLedgerItems(customer);
+          final borrowed = items.fold(0.0, (sum, item) => sum + item.principalAmount);
+          final repaid = items
+              .where((item) => item.status.toLowerCase() == 'inactive')
+              .fold(0.0, (sum, item) => sum + item.totalRepayableAmount);
+          final balance = items
+              .where((item) => item.status.toLowerCase() == 'active')
+              .fold(0.0, (sum, item) => sum + item.totalRepayableAmount);
+
+          return RefreshIndicator(
+            onRefresh: () async {
+              setState(() {
+                _customerFuture = context
+                    .read<AppState>()
+                    .fetchCustomerDetailsFromApi(widget.customer.id);
+              });
+              await _customerFuture;
+            },
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: EdgeInsets.zero,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    customer.name,
-                    style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
+                  _buildHeader(customer),
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            _summaryCard(
+                              icon: Icons.arrow_downward,
+                              iconColor: Colors.blue,
+                              label: "Borrowed",
+                              amount: borrowed,
+                            ),
+                            _summaryCard(
+                              icon: Icons.arrow_upward,
+                              iconColor: Colors.green,
+                              label: "Repaid",
+                              amount: repaid,
+                            ),
+                            _summaryCard(
+                              icon: Icons.account_balance_wallet,
+                              iconColor: balance > 0 ? Colors.red : Colors.green,
+                              label: "Balance",
+                              amount: balance,
+                              amountColor: balance > 0 ? Colors.red : Colors.green,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 26),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              "Transaction History",
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            Text("${items.length} transactions"),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        if (items.isEmpty)
+                          const Center(
+                            child: Padding(
+                              padding: EdgeInsets.only(top: 30),
+                              child: Text("No transactions yet"),
+                            ),
+                          ),
+                        for (final item in items) _transactionCard(item),
+                      ],
                     ),
                   ),
-
-                  const SizedBox(height: 8),
-
-                  if(customer.ghanaCardNumber != null && customer.ghanaCardNumber!.isNotEmpty)
-                    Text(
-                      "💳 Ghana Card ID: ${customer.ghanaCardNumber}",
-                      style: const TextStyle(fontSize: 15),
+                  if (items.isEmpty)
+                    const SizedBox(
+                      height: 20,
                     ),
-                  Text(
-                    "📞 Phone: ${customer.phone}",
-                    style: const TextStyle(fontSize: 15),
-                  ),
+                  if (items.isNotEmpty)
+                    const SizedBox(
+                      height: 10,
+                    ),
                 ],
               ),
             ),
-
-            const SizedBox(height: 20),
-
-            // SUMMARY CARDS (Now use the locally calculated values)
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                _summaryCard(
-                  icon: Icons.arrow_downward,
-                  iconColor: Colors.blue,
-                  label: "Borrowed",
-                  amount: borrowed,
-                ),
-                _summaryCard(
-                  icon: Icons.arrow_upward,
-                  iconColor: Colors.green,
-                  label: "Repaid",
-                  amount: repaid,
-                ),
-                _summaryCard(
-                  icon: Icons.account_balance_wallet,
-                  iconColor: balance > 0 ? Colors.red : Colors.green,
-                  label: "Balance",
-                  amount: balance,
-                  amountColor: balance > 0 ? Colors.red : Colors.green,
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 26),
-
-            // TRANSACTION HISTORY TITLE
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  "Transaction History",
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                Text("${transactions.length} transactions"),
-              ],
-            ),
-
-            const SizedBox(height: 12),
-
-            // TRANSACTIONS LIST
-            if (transactions.isEmpty)
-              const Center(
-                child: Padding(
-                  padding: EdgeInsets.only(top: 30),
-                  child: Text("No transactions yet"),
-                ),
-              ),
-
-            for (var t in transactions) _transactionCard(t),
-          ],
-        ),
+          );
+        },
       ),
-      // SpeedDial FAB remains the same
       floatingActionButton: SpeedDial(
         icon: Icons.add,
         activeIcon: Icons.close,
@@ -510,7 +523,6 @@ class CustomerLedgerPage extends StatelessWidget {
         spacing: 12,
         spaceBetweenChildren: 12,
         animationDuration: const Duration(milliseconds: 300),
-
         children: [
           SpeedDialChild(
             child: const Icon(Icons.calendar_today),
@@ -521,7 +533,7 @@ class CustomerLedgerPage extends StatelessWidget {
                 context,
                 MaterialPageRoute(
                   builder: (_) => AddTransactionPage(
-                    customer: customer,
+                    customer: widget.customer,
                     preselectedType: TransactionType.loan,
                     preselectedLoanKind: "Daily Loan",
                   ),
@@ -538,7 +550,7 @@ class CustomerLedgerPage extends StatelessWidget {
                 context,
                 MaterialPageRoute(
                   builder: (_) => AddTransactionPage(
-                    customer: customer,
+                    customer: widget.customer,
                     preselectedType: TransactionType.loan,
                     preselectedLoanKind: "Soft Loan",
                   ),
@@ -555,7 +567,7 @@ class CustomerLedgerPage extends StatelessWidget {
                 context,
                 MaterialPageRoute(
                   builder: (_) => AddTransactionPage(
-                    customer: customer,
+                    customer: widget.customer,
                     preselectedType: TransactionType.repayment,
                   ),
                 ),
@@ -565,6 +577,95 @@ class CustomerLedgerPage extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Widget _buildHeader(Customer customer) {
+    final profileBytes = _safeBase64(customer.profilePicture);
+    final hasImage = profileBytes != null;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: const BorderRadius.only(
+          bottomLeft: Radius.circular(22),
+          bottomRight: Radius.circular(22),
+        ),
+        boxShadow: const [
+          BoxShadow(color: Colors.black26, blurRadius: 10, offset: Offset(0, 4)),
+        ],
+      ),
+      child: Row(
+        children: [
+          ClipOval(
+            child: SizedBox(
+              width: 78,
+              height: 78,
+              child: hasImage
+                  ? Image.memory(
+                      profileBytes,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => _headerInitialAvatar(customer),
+                    )
+                  : _headerInitialAvatar(customer),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  customer.name,
+                  style: const TextStyle(
+                    fontSize: 21,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  "📞 ${customer.phone}",
+                  style: const TextStyle(color: Colors.black87, fontSize: 14),
+                ),
+                Text(
+                  "💳 ${customer.ghanaCardNumber.isEmpty ? 'Ghana card not set' : customer.ghanaCardNumber}",
+                  style: const TextStyle(color: Colors.black87, fontSize: 14),
+                ),
+                Text(
+                  "🪪 ${customer.licenseIdNumber.isEmpty ? 'License not set' : customer.licenseIdNumber}",
+                  style: const TextStyle(color: Colors.black87, fontSize: 14),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _headerInitialAvatar(Customer customer) {
+    return Container(
+      color: Colors.grey.shade500,
+      alignment: Alignment.center,
+      child: Text(
+        customer.firstInitial,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 32,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  }
+
+  Uint8List? _safeBase64(String? input) {
+    if (input == null || input.trim().isEmpty) return null;
+    try {
+      return base64Decode(input);
+    } catch (_) {
+      return null;
+    }
   }
 
   Widget _summaryCard({
@@ -580,9 +681,8 @@ class CustomerLedgerPage extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black12, blurRadius: 6, offset: Offset(0, 2))
+        boxShadow: const [
+          BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2)),
         ],
       ),
       child: Column(
@@ -604,29 +704,22 @@ class CustomerLedgerPage extends StatelessWidget {
     );
   }
 
-  Widget _transactionCard(TransactionRecord t) {
-    final isLoan = t.type == TransactionType.loan;
-    final color = isLoan ? Colors.red : Colors.green;
+  Widget _transactionCard(_LedgerItem t) {
+    final isLoan = t.loanType == 'Daily Loan' || t.loanType == 'Soft Loan';
+    final isInactive = t.status.toLowerCase() == 'inactive';
+    final color = isInactive ? Colors.grey : (isLoan ? Colors.red : Colors.green);
     final icon = isLoan ? Icons.arrow_downward : Icons.arrow_upward;
 
-    String title;
-    if (isLoan) {
-      title = "Loan${t.loanKind.isNotEmpty ? ' - ${t.loanKind}' : ''}";
-    } else {
-      title = "Repayment";
-    }
+    final title = "Loan - ${t.loanType}";
 
     return Container(
       padding: const EdgeInsets.all(16),
       margin: const EdgeInsets.only(bottom: 14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isInactive ? Colors.grey.shade100 : Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black12,
-              blurRadius: 8,
-              offset: const Offset(0, 2))
+        boxShadow: const [
+          BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 2))
         ],
       ),
       child: Column(
@@ -635,7 +728,7 @@ class CustomerLedgerPage extends StatelessWidget {
           Row(
             children: [
               CircleAvatar(
-                backgroundColor: color.withOpacity(0.1),
+                backgroundColor: color.withValues(alpha: 0.1),
                 child: Icon(icon, color: color),
               ),
               const SizedBox(width: 12),
@@ -649,7 +742,7 @@ class CustomerLedgerPage extends StatelessWidget {
                 ),
               ),
               Text(
-                "GHS ${t.amount.toStringAsFixed(2)}",
+                "GHS ${t.totalRepayableAmount.toStringAsFixed(2)}",
                 style: TextStyle(
                   color: color,
                   fontSize: 17,
@@ -658,20 +751,92 @@ class CustomerLedgerPage extends StatelessWidget {
               ),
             ],
           ),
-          if (isLoan && t.interestPercent > 0) ...[
-            const SizedBox(height: 10),
+          const SizedBox(height: 10),
+          Text(
+            "Principal: GHS ${t.principalAmount.toStringAsFixed(2)} | Interest: GHS ${t.interestAmount.toStringAsFixed(2)}",
+            style: const TextStyle(fontSize: 13, color: Colors.black54),
+          ),
+          Text(
+            "Status: ${t.status}",
+            style: TextStyle(
+              fontSize: 13,
+              color: isInactive ? Colors.grey : Colors.red,
+            ),
+          ),
+          if (t.note.isNotEmpty)
             Text(
-              "(Loan Amount + ${t.interestPercent.toStringAsFixed(1)}% Interest = GHS ${t.amount.toStringAsFixed(2)})",
+              t.note,
               style: const TextStyle(fontSize: 13, color: Colors.black54),
             ),
-          ],
           const SizedBox(height: 8),
           Text(
-            DateFormat('dd MMM, yyyy - hh:mm a').format(DateTime.parse(t.date)),
+            DateFormat('dd MMM, yyyy - hh:mm a').format(t.loanDate),
             style: const TextStyle(fontSize: 13, color: Colors.black54),
           ),
         ],
       ),
     );
   }
+
+  List<_LedgerItem> _buildLedgerItems(Customer customer) {
+    final List<_LedgerItem> items = [];
+    for (final loan in customer.dailyLoans) {
+      items.add(
+        _LedgerItem(
+          id: (loan['id'] ?? '').toString(),
+          loanType: 'Daily Loan',
+          principalAmount: _num(loan['principalAmount']),
+          interestAmount: _num(loan['interestAmount']),
+          totalRepayableAmount: _num(loan['totalRepayableAmount']),
+          loanDate: _parseDate(loan['loanDate']),
+          status: (loan['status'] ?? '').toString(),
+          note: (loan['notes'] ?? '').toString(),
+        ),
+      );
+    }
+    for (final loan in customer.softLoans) {
+      final principal = _num(loan['principalAmount']);
+      final total = _num(loan['totalRepayableAmount']);
+      items.add(
+        _LedgerItem(
+          id: (loan['id'] ?? '').toString(),
+          loanType: 'Soft Loan',
+          principalAmount: principal,
+          interestAmount: (total - principal).clamp(0, 1e18).toDouble(),
+          totalRepayableAmount: total,
+          loanDate: _parseDate(loan['loanStartDate']),
+          status: (loan['status'] ?? '').toString(),
+          note: (loan['notes'] ?? '').toString(),
+        ),
+      );
+    }
+    items.sort((a, b) => b.loanDate.compareTo(a.loanDate));
+    return items;
+  }
+
+  double _num(dynamic value) => value is num ? value.toDouble() : double.tryParse('$value') ?? 0.0;
+
+  DateTime _parseDate(dynamic value) => DateTime.tryParse('${value ?? ''}') ?? DateTime.now();
+}
+
+class _LedgerItem {
+  final String id;
+  final String loanType;
+  final double principalAmount;
+  final double interestAmount;
+  final double totalRepayableAmount;
+  final DateTime loanDate;
+  final String status;
+  final String note;
+
+  _LedgerItem({
+    required this.id,
+    required this.loanType,
+    required this.principalAmount,
+    required this.interestAmount,
+    required this.totalRepayableAmount,
+    required this.loanDate,
+    required this.status,
+    required this.note,
+  });
 }

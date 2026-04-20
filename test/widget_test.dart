@@ -14,7 +14,7 @@ import 'package:lend_ledger/state/app_state.dart';
 void main() {
   testWidgets('Counter increments smoke test', (WidgetTester tester) async {
     // Build our app and trigger a frame.
-    await tester.pumpWidget( MyApp(appState: AppState(),));
+    await tester.pumpWidget( MyApp(appState: AppState(), isLoggedIn: false));
 
     // Verify that our counter starts at 0.
     expect(find.text('0'), findsOneWidget);

@@ -384,6 +384,7 @@ import 'package:lend_ledger/db/transaction_dao.dart';
 import 'package:lend_ledger/models/customer.dart';
 import 'package:lend_ledger/models/loan_record.dart';
 import 'package:lend_ledger/models/transactionRecord.dart';
+import 'package:lend_ledger/services/customers_api_service.dart';
 import 'package:uuid/uuid.dart';
 import 'package:local_auth/local_auth.dart';
 
@@ -394,10 +395,13 @@ class AppState extends ChangeNotifier {
   final CustomersDao _customersDao = CustomersDao();
   final TransactionsDao _transactionsDao = TransactionsDao();
   final SoftLoanDao _softLoanDao = SoftLoanDao();
+  final CustomersApiService _customersApiService = CustomersApiService();
   final LocalAuthentication auth = LocalAuthentication();
 
   // --- In-memory state ---
   List<Customer> customers = [];
+  List<Customer> apiCustomers = [];
+  String? customersApiError;
   List<TransactionRecord> transactions = [];
   bool isLoggedIn = false;
   String loggedInEmail = '';
@@ -412,6 +416,82 @@ class AppState extends ChangeNotifier {
     loggedInEmail = sp.getString('loggedInEmail') ?? '';
     loggedInUserName = sp.getString('loggedInUserName') ?? '';
     notifyListeners();
+  }
+
+  Future<void> loadCustomersFromApi() async {
+    customersApiError = null;
+    try {
+      apiCustomers = await _customersApiService.fetchCustomers();
+    } catch (e) {
+      customersApiError = e.toString();
+      apiCustomers = [];
+    }
+    notifyListeners();
+  }
+
+  Future<Customer> fetchCustomerDetailsFromApi(String customerId) async {
+    return _customersApiService.fetchCustomerById(customerId);
+  }
+
+  Future<void> deleteCustomerFromApi(String customerId) async {
+    customersApiError = null;
+    await _customersApiService.deleteCustomer(customerId);
+    apiCustomers.removeWhere((customer) => customer.id == customerId);
+    notifyListeners();
+  }
+
+  Future<void> addCustomerToApi({
+    required String fullName,
+    required String countryCode,
+    required String phoneNumber,
+    String? ghanaCardNumber,
+    String? licenseIdNumber,
+    String? ghanaCardImagePath,
+    String? licenseIdImagePath,
+    String? profilePicturePath,
+  }) async {
+    customersApiError = null;
+    await _customersApiService.createCustomer(
+      fullName: fullName,
+      countryCode: countryCode,
+      phoneNumber: phoneNumber,
+      ghanaCardNumber: ghanaCardNumber,
+      licenseIdNumber: licenseIdNumber,
+      ghanaCardImagePath: ghanaCardImagePath,
+      licenseIdImagePath: licenseIdImagePath,
+      profilePicturePath: profilePicturePath,
+    );
+    await loadCustomersFromApi();
+  }
+
+  Future<void> updateCustomerInApi({
+    required String id,
+    required String fullName,
+    required String countryCode,
+    required String phoneNumber,
+    String? ghanaCardNumber,
+    String? licenseIdNumber,
+    String? ghanaCardImagePath,
+    String? licenseIdImagePath,
+    String? profilePicturePath,
+    List<Map<String, dynamic>> dailyLoans = const [],
+    List<Map<String, dynamic>> softLoans = const [],
+  }) async {
+    customersApiError = null;
+    await _customersApiService.updateCustomer(
+      id: id,
+      fullName: fullName,
+      countryCode: countryCode,
+      phoneNumber: phoneNumber,
+      ghanaCardNumber: ghanaCardNumber,
+      licenseIdNumber: licenseIdNumber,
+      ghanaCardImagePath: ghanaCardImagePath,
+      licenseIdImagePath: licenseIdImagePath,
+      profilePicturePath: profilePicturePath,
+      dailyLoans: dailyLoans,
+      softLoans: softLoans,
+    );
+    await loadCustomersFromApi();
   }
 
   String generateUUID() => _uuid.v4();
