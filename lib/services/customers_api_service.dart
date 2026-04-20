@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:lend_ledger/config/api_config.dart';
 import 'package:lend_ledger/models/customer.dart';
@@ -88,7 +89,6 @@ class CustomersApiService {
         'Failed to create customer. Status code: ${response.statusCode}',
       );
     }
-
   }
 
   Future<void> updateCustomer({
@@ -105,29 +105,37 @@ class CustomersApiService {
     List<Map<String, dynamic>> softLoans = const [],
   }) async {
     final uri = Uri.parse(ApiConfig.endpoint('/api/Customers/$id'));
+    final normalizedPhone = _toNullableInt32(phoneNumber);
     final body = <String, dynamic>{
       "id": id,
       "fullName": fullName,
       "countryCode": countryCode,
-      "phoneNumber": int.tryParse(phoneNumber) ?? 0,
+      "phoneNumber": normalizedPhone,
       "ghanaCardNumber": ghanaCardNumber ?? "",
       "licenseIdNumber": licenseIdNumber ?? "",
       "ghanaCardImage": _asBase64OrRaw(ghanaCardImagePath),
       "licenseIdImage": _asBase64OrRaw(licenseIdImagePath),
       "profilePicture": _asBase64OrRaw(profilePicturePath),
-      "dailyLoans": dailyLoans,
-      "softLoans": softLoans,
+      // Required by backend model binding on update.
+      "customer": fullName,
     };
+    final jsonBody = jsonEncode(body);
+
+    debugPrint('PUT $uri');
+    debugPrint('Update customer payload: $jsonBody');
 
     final response = await http.put(
       uri,
       headers: {"Content-Type": "application/json"},
-      body: jsonEncode(body),
+      body: jsonBody,
     );
+
+    debugPrint('Update customer response status: ${response.statusCode}');
+    debugPrint('Update customer response body: ${response.body}');
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception(
-        'Failed to update customer. Status code: ${response.statusCode}',
+        'Failed to update customer. Status code: ${response.statusCode}. Response: ${response.body}',
       );
     }
   }
@@ -141,5 +149,15 @@ class CustomersApiService {
     }
     // Already a base64 string from API response.
     return value;
+  }
+
+  int? _toNullableInt32(String value) {
+    final digits = value.replaceAll(RegExp(r'\D'), '');
+    if (digits.isEmpty) return null;
+    // phoneNumber backend expects Int32; keep a safe local-number-sized value.
+    final local = digits.length > 9
+        ? digits.substring(digits.length - 9)
+        : digits;
+    return int.tryParse(local);
   }
 }

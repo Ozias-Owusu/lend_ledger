@@ -137,9 +137,8 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
             loanKind: 'soft',
             amount: total,
             interestPercent: _num(loan['interestRate']) * 100,
-            date:
-                (loan['loanStartDate'] ?? DateTime.now().toIso8601String())
-                    .toString(),
+            date: (loan['loanStartDate'] ?? DateTime.now().toIso8601String())
+                .toString(),
             note: (loan['notes'] ?? '').toString(),
             remainingAmount: remaining,
           ),
@@ -162,9 +161,9 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
       });
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Unable to load loans: $e")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Unable to load loans: $e")));
     }
   }
 
@@ -181,25 +180,40 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
     if (_isPostingRepayment) return;
     final amount = double.tryParse(_amountCtl.text);
     if (amount == null || amount <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please enter a valid amount.")));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please enter a valid amount.")),
+      );
       return;
     }
 
     if (_type == TransactionType.repayment) {
       if (_selectedLoan == null) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please select which loan to repay.")));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Please select which loan to repay.")),
+        );
         return;
       }
       if (_selectedLoan!.loanKind == 'soft' && _selectedInstallment != null) {
         if (amount > _selectedInstallment!.amount) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            backgroundColor: Colors.red,
-            content: Text("Amount cannot exceed the installment of GHS ${_selectedInstallment!.amount.toStringAsFixed(2)}"),
-          ));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              backgroundColor: Colors.red,
+              content: Text(
+                "Amount cannot exceed the installment of GHS ${_selectedInstallment!.amount.toStringAsFixed(2)}",
+              ),
+            ),
+          );
           return;
         }
       } else if (amount > _selectedLoan!.remainingAmount) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(backgroundColor: Colors.red, content: Text("Repayment can't exceed balance of GHS ${_selectedLoan!.remainingAmount.toStringAsFixed(2)}.")));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: Colors.red,
+            content: Text(
+              "Repayment can't exceed balance of GHS ${_selectedLoan!.remainingAmount.toStringAsFixed(2)}.",
+            ),
+          ),
+        );
         return;
       }
     }
@@ -212,9 +226,9 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
       final installmentNumber = _selectedInstallment == null
           ? 0
           : (selected.installments.indexWhere(
-                    (i) => i.dueDate == _selectedInstallment!.dueDate,
-                  ) +
-                  1);
+                  (i) => i.dueDate == _selectedInstallment!.dueDate,
+                ) +
+                1);
       try {
         setState(() => _isPostingRepayment = true);
         await _repaymentsApiService.createRepayment(
@@ -334,7 +348,8 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
       final totalRepayable = principal + totalInterest;
       finalAmount = totalRepayable;
       interestToSave = _interestPercent;
-    } else { // Repayment logic
+    } else {
+      // Repayment logic
       note = 'Repayment for loan: ${_selectedLoan!.id}';
     }
 
@@ -342,7 +357,9 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
       id: transactionId,
       customerId: widget.customer.id,
       type: _type,
-      loanKind: _type == TransactionType.repayment ? _selectedLoan!.loanKind : _loanKind,
+      loanKind: _type == TransactionType.repayment
+          ? _selectedLoan!.loanKind
+          : _loanKind,
       amount: finalAmount,
       interestPercent: interestToSave,
       date: DateTime.now().toIso8601String(),
@@ -388,7 +405,11 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
   Widget build(BuildContext context) {
     final isSoftLoan = _type == TransactionType.loan && _loanKind == "soft";
     final isRepayment = _type == TransactionType.repayment;
-    final title = isRepayment ? "Record Repayment" : isSoftLoan ? "Add Soft Loan" : "Add Daily Loan";
+    final title = isRepayment
+        ? "Record Repayment"
+        : isSoftLoan
+        ? "Add Soft Loan"
+        : "Add Daily Loan";
 
     // --- Calculations for UI display ---
     final amount = double.tryParse(_amountCtl.text) ?? 0.0;
@@ -442,21 +463,40 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                 ),
                 child: Column(
                   children: [
-                    const Text("Total Outstanding Balance", style: TextStyle(fontSize: 16)),
+                    const Text(
+                      "Total Outstanding Balance",
+                      style: TextStyle(fontSize: 16),
+                    ),
                     const SizedBox(height: 8),
-                    Text("GHS ${_outstandingBalance.toStringAsFixed(2)}", style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
+                    Text(
+                      "GHS ${_outstandingBalance.toStringAsFixed(2)}",
+                      style: const TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ],
                 ),
               ),
-              const Text("Select Loan to Repay:", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              const Text(
+                "Select Loan to Repay:",
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
               const SizedBox(height: 10),
               GestureDetector(
-                onTap: _customerLoans.isEmpty ? null : () => _showLoanSelection(context),
+                onTap: _customerLoans.isEmpty
+                    ? null
+                    : () => _showLoanSelection(context),
                 child: Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 18,
+                  ),
                   decoration: BoxDecoration(
-                    color: _customerLoans.isEmpty ? Colors.grey.shade200 : Colors.grey.shade100,
+                    color: _customerLoans.isEmpty
+                        ? Colors.grey.shade200
+                        : Colors.grey.shade100,
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: Colors.grey.shade300),
                   ),
@@ -465,15 +505,25 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                     children: [
                       Expanded(
                         child: Text(
-                          _selectedLoan != null ? _formatLoanDisplay(_selectedLoan!) : "Select a loan",
+                          _selectedLoan != null
+                              ? _formatLoanDisplay(_selectedLoan!)
+                              : "Select a loan",
                           style: TextStyle(
                             fontSize: 18,
-                            color: _selectedLoan == null ? Colors.grey.shade600 : Colors.black,
-                            fontWeight: _selectedLoan == null ? FontWeight.normal : FontWeight.w500,
+                            color: _selectedLoan == null
+                                ? Colors.grey.shade600
+                                : Colors.black,
+                            fontWeight: _selectedLoan == null
+                                ? FontWeight.normal
+                                : FontWeight.w500,
                           ),
                         ),
                       ),
-                      if (_customerLoans.isNotEmpty) Icon(Icons.arrow_drop_down, color: Colors.grey.shade600),
+                      if (_customerLoans.isNotEmpty)
+                        Icon(
+                          Icons.arrow_drop_down,
+                          color: Colors.grey.shade600,
+                        ),
                     ],
                   ),
                 ),
@@ -482,16 +532,23 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
               if (_selectedLoan != null && _selectedLoan!.loanKind == 'soft')
                 _buildInstallmentSection(),
               const SizedBox(height: 30),
-              const Text("Repayment Amount", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              const Text(
+                "Repayment Amount",
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
               const SizedBox(height: 10),
               TextFormField(
                 controller: _amountCtl,
                 keyboardType: TextInputType.number,
-                readOnly: _selectedLoan?.loanKind == 'soft' && _selectedInstallment != null,
+                readOnly:
+                    _selectedLoan?.loanKind == 'soft' &&
+                    _selectedInstallment != null,
                 decoration: InputDecoration(
                   hintText: "Enter amount",
                   border: const OutlineInputBorder(),
-                  filled: _selectedLoan?.loanKind == 'soft' && _selectedInstallment != null,
+                  filled:
+                      _selectedLoan?.loanKind == 'soft' &&
+                      _selectedInstallment != null,
                   fillColor: Colors.grey.shade200,
                 ),
               ),
@@ -499,17 +556,29 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
 
             // --- SECTION 2: LOAN UI (DAILY & SOFT) ---
             if (!isRepayment) ...[
-              const Text("Loan Amount", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              const Text(
+                "Loan Amount",
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
               const SizedBox(height: 10),
               TextField(
                 controller: _amountCtl,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(hintText: "Enter loan amount", border: OutlineInputBorder(), prefixText: 'GHS '),
+                decoration: const InputDecoration(
+                  hintText: "Enter loan amount",
+                  border: OutlineInputBorder(),
+                  prefixText: 'GHS ',
+                ),
                 onChanged: (_) => setState(() {}),
               ),
               const SizedBox(height: 30),
-              Text("Interest Rate: ${_interestPercent.toStringAsFixed(1)}% per ${_durationUnit.name.substring(0, _durationUnit.name.length - 1)}",
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              Text(
+                "Interest Rate: ${_interestPercent.toStringAsFixed(1)}% per ${_durationUnit.name.substring(0, _durationUnit.name.length - 1)}",
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
               Slider(
                 value: _interestPercent,
                 min: 0,
@@ -520,7 +589,10 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
               ),
               const SizedBox(height: 20),
               if (isSoftLoan) ...[
-                const Text("Loan Duration", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                const Text(
+                  "Loan Duration",
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
                 const SizedBox(height: 10),
                 Row(
                   children: [
@@ -529,8 +601,12 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                       child: TextFormField(
                         controller: _durationCtl,
                         keyboardType: TextInputType.number,
-                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                        decoration: const InputDecoration(border: OutlineInputBorder()),
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                        ],
+                        decoration: const InputDecoration(
+                          border: OutlineInputBorder(),
+                        ),
                         onChanged: (_) => setState(() {}),
                       ),
                     ),
@@ -540,12 +616,24 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                       child: DropdownButtonFormField<DurationUnit>(
                         value: _durationUnit,
                         items: const [
-                          DropdownMenuItem(value: DurationUnit.days, child: Text('Days')),
-                          DropdownMenuItem(value: DurationUnit.weeks, child: Text('Weeks')),
-                          DropdownMenuItem(value: DurationUnit.months, child: Text('Months')),
+                          DropdownMenuItem(
+                            value: DurationUnit.days,
+                            child: Text('Days'),
+                          ),
+                          DropdownMenuItem(
+                            value: DurationUnit.weeks,
+                            child: Text('Weeks'),
+                          ),
+                          DropdownMenuItem(
+                            value: DurationUnit.months,
+                            child: Text('Months'),
+                          ),
                         ],
-                        onChanged: (value) => setState(() => _durationUnit = value!),
-                        decoration: const InputDecoration(border: OutlineInputBorder()),
+                        onChanged: (value) =>
+                            setState(() => _durationUnit = value!),
+                        decoration: const InputDecoration(
+                          border: OutlineInputBorder(),
+                        ),
                       ),
                     ),
                   ],
@@ -559,13 +647,19 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                   padding: const EdgeInsets.all(16.0),
                   child: Column(
                     children: [
-                      _summaryRow("Total Repayable:", "GHS ${totalRepayable.toStringAsFixed(2)}"),
+                      _summaryRow(
+                        "Total Repayable:",
+                        "GHS ${totalRepayable.toStringAsFixed(2)}",
+                      ),
                       if (isSoftLoan) ...[
                         const Divider(height: 20),
-                        _summaryRow(installmentLabel, "GHS ${installmentAmount.toStringAsFixed(2)}"),
+                        _summaryRow(
+                          installmentLabel,
+                          "GHS ${installmentAmount.toStringAsFixed(2)}",
+                        ),
                         const Divider(height: 20),
                         _summaryRow("Loan End Date:", loanEndDate),
-                      ]
+                      ],
                     ],
                   ),
                 ),
@@ -575,7 +669,8 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: (_customerLoans.isEmpty && isRepayment) || _isPostingRepayment
+        onPressed:
+            (_customerLoans.isEmpty && isRepayment) || _isPostingRepayment
             ? null
             : _saveTransaction,
         icon: _isPostingRepayment
@@ -588,7 +683,7 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                 ),
               )
             : const Icon(Icons.save),
-        label: Text(_isPostingRepayment ? "Posting..." : "Save Transaction"),
+        label: Text(_isPostingRepayment ? "Saving..." : "Save Transaction"),
       ),
     );
   }
@@ -600,11 +695,15 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text("Select Installment to Pay:", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+        const Text(
+          "Select Installment to Pay:",
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+        ),
         const SizedBox(height: 10),
         ..._selectedLoan!.installments.map((installment) {
           if (installment.status == "Paid") return const SizedBox.shrink();
-          bool isSelected = _selectedInstallment?.dueDate == installment.dueDate;
+          bool isSelected =
+              _selectedInstallment?.dueDate == installment.dueDate;
           return Card(
             elevation: isSelected ? 4 : 1,
             shape: RoundedRectangleBorder(
@@ -616,11 +715,15 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
             ),
             child: ListTile(
               title: Text("GHS ${installment.amount.toStringAsFixed(2)}"),
-              subtitle: Text("Due on: ${DateFormat('dd MMM, yyyy').format(installment.dueDate)}"),
+              subtitle: Text(
+                "Due on: ${DateFormat('dd MMM, yyyy').format(installment.dueDate)}",
+              ),
               trailing: Text(
                 installment.status,
                 style: TextStyle(
-                  color: installment.status == "Overdue" ? Colors.red : Colors.green,
+                  color: installment.status == "Overdue"
+                      ? Colors.red
+                      : Colors.green,
                   fontWeight: FontWeight.bold,
                 ),
               ),
@@ -646,69 +749,78 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
           padding: const EdgeInsets.all(16),
           child: Column(
             children: [
-              const Text("Select Loan", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const Text(
+                "Select Loan",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
               const SizedBox(height: 20),
               Expanded(
                 child: _customerLoans.isEmpty
                     ? const Center(child: Text("No active loans found"))
                     : ListView.builder(
-                  itemCount: _customerLoans.length,
-                  itemBuilder: (context, index) {
-                    final loan = _customerLoans[index];
-                    final selected = _selectedLoan?.id == loan.id;
-                    final isSoft = loan.loanKind.toLowerCase() == 'soft';
-                    final loanDate = DateTime.tryParse(loan.date);
-                    final formattedDate = loanDate != null
-                        ? DateFormat('dd MMM yyyy').format(loanDate)
-                        : "Unknown date";
+                        itemCount: _customerLoans.length,
+                        itemBuilder: (context, index) {
+                          final loan = _customerLoans[index];
+                          final selected = _selectedLoan?.id == loan.id;
+                          final isSoft = loan.loanKind.toLowerCase() == 'soft';
+                          final loanDate = DateTime.tryParse(loan.date);
+                          final formattedDate = loanDate != null
+                              ? DateFormat('dd MMM yyyy').format(loanDate)
+                              : "Unknown date";
 
-                    return Card(
-                      elevation: selected ? 4 : 1,
-                      color: selected ? Colors.indigo.shade50 : Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        side: BorderSide(
-                          color: selected
-                              ? Colors.indigo
-                              : Colors.grey.shade300,
-                        ),
-                      ),
-                      child: ListTile(
-                        leading: CircleAvatar(
-                          backgroundColor: isSoft
-                              ? Colors.orange.shade100
-                              : Colors.red.shade100,
-                          child: Icon(
-                            isSoft ? Icons.handshake : Icons.calendar_today,
-                            color: isSoft
-                                ? Colors.orange.shade700
-                                : Colors.red.shade700,
-                            size: 18,
-                          ),
-                        ),
-                        title: Text(
-                          '${loan.loanKind.toUpperCase()} LOAN',
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        subtitle: Text(
-                          'Balance: GHS ${loan.remainingAmount.toStringAsFixed(2)}\nDate: $formattedDate',
-                        ),
-                        trailing: Text(
-                          'GHS ${loan.remainingAmount.toStringAsFixed(2)}',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.indigo,
-                          ),
-                        ),
-                        isThreeLine: true,
-                        onTap: () {
-                          _selectLoan(loan);
-                          Navigator.pop(context);
+                          return Card(
+                            elevation: selected ? 4 : 1,
+                            color: selected
+                                ? Colors.indigo.shade50
+                                : Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              side: BorderSide(
+                                color: selected
+                                    ? Colors.indigo
+                                    : Colors.grey.shade300,
+                              ),
+                            ),
+                            child: ListTile(
+                              leading: CircleAvatar(
+                                backgroundColor: isSoft
+                                    ? Colors.orange.shade100
+                                    : Colors.red.shade100,
+                                child: Icon(
+                                  isSoft
+                                      ? Icons.handshake
+                                      : Icons.calendar_today,
+                                  color: isSoft
+                                      ? Colors.orange.shade700
+                                      : Colors.red.shade700,
+                                  size: 18,
+                                ),
+                              ),
+                              title: Text(
+                                '${loan.loanKind.toUpperCase()} LOAN',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              subtitle: Text(
+                                'Balance: GHS ${loan.remainingAmount.toStringAsFixed(2)}\nDate: $formattedDate',
+                              ),
+                              trailing: Text(
+                                'GHS ${loan.remainingAmount.toStringAsFixed(2)}',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.indigo,
+                                ),
+                              ),
+                              isThreeLine: true,
+                              onTap: () {
+                                _selectLoan(loan);
+                                Navigator.pop(context);
+                              },
+                            ),
+                          );
                         },
                       ),
-                    );
-                  },
-                ),
               ),
             ],
           ),
@@ -721,7 +833,9 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
     final currencySymbol = 'GHS';
     final loanBalance = loan.remainingAmount;
     final loanDate = DateTime.tryParse(loan.date);
-    final formattedDate = loanDate != null ? DateFormat('dd/MM/yyyy').format(loanDate) : "Unknown Date";
+    final formattedDate = loanDate != null
+        ? DateFormat('dd/MM/yyyy').format(loanDate)
+        : "Unknown Date";
     final status = loan.isOverdue ? ' (Overdue)' : '';
     return '${loan.loanKind.toUpperCase()}: $currencySymbol${loanBalance.toStringAsFixed(2)} - Due: $formattedDate$status';
   }
@@ -735,8 +849,18 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: TextStyle(fontSize: 16, color: Colors.grey.shade700)),
-        Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.indigo)),
+        Text(
+          label,
+          style: TextStyle(fontSize: 16, color: Colors.grey.shade700),
+        ),
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: Colors.indigo,
+          ),
+        ),
       ],
     );
   }
