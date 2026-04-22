@@ -69,6 +69,7 @@ import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:lend_ledger/models/customer.dart';
 import 'package:provider/provider.dart';
 import '../state/app_state.dart';
+import '../utils/amount_formatter.dart';
 import 'add_customer_page.dart';
 import 'customer_ledger_page.dart';
 
@@ -97,13 +98,11 @@ class _CustomersPageState extends State<CustomersPage> {
     final list = state.apiCustomers.where((c) {
       final q = _query.toLowerCase();
       return c.name.toLowerCase().contains(q) ||
-          c.phone.toLowerCase().contains(q) ;
+          c.phone.toLowerCase().contains(q);
     }).toList();
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Customers'),
-      ),
+      appBar: AppBar(title: const Text('Customers')),
 
       body: Column(
         children: [
@@ -116,7 +115,10 @@ class _CustomersPageState extends State<CustomersPage> {
                 hintText: 'Search by name or phone',
                 filled: true,
                 fillColor: Colors.grey.shade200,
-                contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+                contentPadding: const EdgeInsets.symmetric(
+                  vertical: 0,
+                  horizontal: 16,
+                ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(30),
                   borderSide: BorderSide.none,
@@ -142,7 +144,10 @@ class _CustomersPageState extends State<CustomersPage> {
                         children: [
                           const Text(
                             "Unable to load customers from API",
-                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                           const SizedBox(height: 8),
                           Text(
@@ -153,7 +158,9 @@ class _CustomersPageState extends State<CustomersPage> {
                           ElevatedButton(
                             onPressed: () {
                               setState(() {
-                                _initialLoad = context.read<AppState>().loadCustomersFromApi();
+                                _initialLoad = context
+                                    .read<AppState>()
+                                    .loadCustomersFromApi();
                               });
                             },
                             child: const Text("Retry"),
@@ -165,12 +172,16 @@ class _CustomersPageState extends State<CustomersPage> {
                 }
                 if (list.isEmpty) {
                   return const Center(
-                    child: Text("No customers found", style: TextStyle(fontSize: 16)),
+                    child: Text(
+                      "No customers found",
+                      style: TextStyle(fontSize: 16),
+                    ),
                   );
                 }
 
                 return RefreshIndicator(
-                  onRefresh: () => context.read<AppState>().loadCustomersFromApi(),
+                  onRefresh: () =>
+                      context.read<AppState>().loadCustomersFromApi(),
                   child: ListView.builder(
                     padding: const EdgeInsets.all(8),
                     itemCount: list.length,
@@ -183,31 +194,31 @@ class _CustomersPageState extends State<CustomersPage> {
                         child: Slidable(
                           key: ValueKey(cust.id),
 
-                    // LEFT ACTIONS
-                    startActionPane: ActionPane(
-                      motion: const DrawerMotion(),
-                      children: [
-                        SlidableAction(
-                          backgroundColor: Colors.blue,
-                          icon: Icons.edit,
-                          label: 'Edit',
-                          onPressed: (_) => _confirmEdit(cust),
-                        ),
-                      ],
-                    ),
+                          // LEFT ACTIONS
+                          startActionPane: ActionPane(
+                            motion: const DrawerMotion(),
+                            children: [
+                              SlidableAction(
+                                backgroundColor: Colors.blue,
+                                icon: Icons.edit,
+                                label: 'Edit',
+                                onPressed: (_) => _confirmEdit(cust),
+                              ),
+                            ],
+                          ),
 
-                    // RIGHT ACTIONS
-                    endActionPane: ActionPane(
-                      motion: const DrawerMotion(),
-                      children: [
-                        SlidableAction(
-                          backgroundColor: Colors.red,
-                          icon: Icons.delete,
-                          label: 'Delete',
-                          onPressed: (_) => _confirmDelete(cust, state),
-                        ),
-                      ],
-                    ),
+                          // RIGHT ACTIONS
+                          endActionPane: ActionPane(
+                            motion: const DrawerMotion(),
+                            children: [
+                              SlidableAction(
+                                backgroundColor: Colors.red,
+                                icon: Icons.delete,
+                                label: 'Delete',
+                                onPressed: (_) => _confirmDelete(cust, state),
+                              ),
+                            ],
+                          ),
 
                           child: Card(
                             elevation: 3,
@@ -222,7 +233,8 @@ class _CustomersPageState extends State<CustomersPage> {
                                   const SizedBox(width: 12),
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         Text(
                                           cust.name,
@@ -252,7 +264,7 @@ class _CustomersPageState extends State<CustomersPage> {
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
                                       Text(
-                                        balance.toStringAsFixed(2),
+                                        AmountFormatter.compactCurrency(balance),
                                         style: const TextStyle(
                                           color: Colors.green,
                                           fontWeight: FontWeight.bold,
@@ -268,7 +280,8 @@ class _CustomersPageState extends State<CustomersPage> {
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (_) => CustomerLedgerPage(customer: cust),
+                                    builder: (_) =>
+                                        CustomerLedgerPage(customer: cust),
                                   ),
                                 );
                               },
@@ -285,14 +298,17 @@ class _CustomersPageState extends State<CustomersPage> {
         ],
       ),
 
-      floatingActionButton: FloatingActionButton(
-        child: const Icon(Icons.person_add),
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const AddCustomerPage()),
-          );
-        },
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(bottom: 76),
+        child: FloatingActionButton(
+          child: const Icon(Icons.person_add),
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const AddCustomerPage()),
+            );
+          },
+        ),
       ),
     );
   }
@@ -315,16 +331,20 @@ class _CustomersPageState extends State<CustomersPage> {
             onPressed: () async {
               Navigator.pop(context);
               try {
-                await context.read<AppState>().deleteCustomerFromApi(customer.id);
+                await context.read<AppState>().deleteCustomerFromApi(
+                  customer.id,
+                );
                 if (!mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("Customer deleted successfully.")),
+                  const SnackBar(
+                    content: Text("Customer deleted successfully."),
+                  ),
                 );
               } catch (e) {
                 if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text("Delete failed: $e")),
-                );
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(SnackBar(content: Text("Delete failed: $e")));
               }
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),

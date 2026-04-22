@@ -217,10 +217,10 @@ class _EditProfilePageState extends State<EditProfilePage> {
   // Initialize controllers without default text here
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _passwordController =
-  TextEditingController(text: "********"); // Keep as placeholder
-  final TextEditingController _dobController =
-  TextEditingController();
+  final TextEditingController _passwordController = TextEditingController(
+    text: "********",
+  ); // Keep as placeholder
+  final TextEditingController _dobController = TextEditingController();
 
   String _selectedCountry = "Ghana"; // Default to Ghana
   final List<String> _countries = ["Ghana", "Nigeria", "Kenya", "South Africa"];
@@ -284,11 +284,9 @@ class _EditProfilePageState extends State<EditProfilePage> {
                   CircleAvatar(
                     radius: 60, // Reduced radius for a cleaner look
                     backgroundImage: _profileImage != null
-                        ? FileImage(
-                      File(_profileImage!),
-                    )
+                        ? FileImage(File(_profileImage!))
                         : const AssetImage("assets/images/profile_1.jpg")
-                    as ImageProvider,
+                              as ImageProvider,
                   ),
                   Positioned(
                     bottom: 0,
@@ -323,7 +321,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
             TextField(
               controller: _emailController,
-              readOnly: true, // Make email read-only as it's the login identifier
+              readOnly:
+                  true, // Make email read-only as it's the login identifier
               decoration: const InputDecoration(
                 labelText: "Email",
                 border: OutlineInputBorder(),
@@ -345,7 +344,9 @@ class _EditProfilePageState extends State<EditProfilePage> {
               onTap: () {
                 // You can add logic here to navigate to a "Change Password" screen
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("Navigate to Change Password screen.")),
+                  const SnackBar(
+                    content: Text("Navigate to Change Password screen."),
+                  ),
                 );
               },
             ),

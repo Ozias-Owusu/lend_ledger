@@ -1,399 +1,528 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
-import 'package:flutter_speed_dial/flutter_speed_dial.dart';
-import '../state/app_state.dart';
-import 'customers_page.dart';
-import 'settings_page.dart';
-import 'export_data_page.dart';
 
-class DashboardPage extends StatelessWidget {
+import '../services/repayments_api_service.dart';
+import '../state/app_state.dart';
+import '../utils/amount_formatter.dart';
+import 'customers_page.dart';
+
+class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
 
   @override
+  State<DashboardPage> createState() => _DashboardPageState();
+}
+
+class _DashboardPageState extends State<DashboardPage> {
+  final RepaymentsApiService _repaymentsApiService = RepaymentsApiService();
+  late Future<void> _dashboardFuture;
+  List<_DashboardTxn> _allTransactions = const [];
+  String? _transactionsError;
+
+  @override
+  void initState() {
+    super.initState();
+    _dashboardFuture = _loadDashboardData();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final state = Provider.of<AppState>(context);
-    final textTheme = Theme.of(context).textTheme;
+    final state = context.watch<AppState>();
+    final outstanding = state.dashboardMetrics?.totalOutstandingAmount ?? 0.0;
+    final latestTransactions = _allTransactions.take(5).toList();
+    final remainingTransactions = _allTransactions.skip(5).toList();
 
     return SafeArea(
       child: Scaffold(
-        // Use a CustomScrollView for ultimate layout flexibility
-        body: CustomScrollView(
-          slivers: [
-            // Sliver 1: The Welcome Card (always full width)
-            SliverToBoxAdapter(
-              child: _buildItem(context, 0, state, textTheme),
-            ),
+        body: FutureBuilder<void>(
+          future: _dashboardFuture,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting &&
+                state.dashboardMetrics == null) {
+              return const Center(child: CircularProgressIndicator());
+            }
 
-            // Sliver 2: The responsive grid for summary cards
-            _buildResponsiveGrid(context, state, textTheme),
-
-            // Sliver 3: The Quick Actions section (always full width)
-            SliverToBoxAdapter(
-              child: _buildItem(context, 5, state, textTheme),
-            ),
-          ],
-        ),
-        floatingActionButton: _buildSpeedDial(context),
-      ),
-    );
-  }
-
-  // In C:/Users/ooantwi/StudioProjects/Lend_Ledger/lib/pages/dashboard_page.dart
-
-  // New helper method to build the responsive grid for summary cards
-  Widget _buildResponsiveGrid(BuildContext context, AppState state, TextTheme textTheme) {
-    // *** THE FIX IS HERE ***
-    // The LayoutBuilder must be the direct child of the sliver, not the other way around.
-    // It builds a SliverPadding, which in turn contains the SliverGrid.
-    return SliverLayoutBuilder(
-      builder: (context, constraints) {
-        // Decide on the number of columns based on screen width.
-        final crossAxisCount = constraints.crossAxisExtent < 360 ? 1 : 2;
-
-        return SliverPadding(
-          padding: const EdgeInsets.all(12.0),
-          sliver: SliverGrid(
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: crossAxisCount,
-              mainAxisSpacing: 8,
-              crossAxisSpacing: 8,
-              childAspectRatio: 1.2,
-            ),
-            delegate: SliverChildBuilderDelegate(
-                  (context, index) {
-                // Map the grid index (0-3) to the summary card indices (1-4)
-                return _buildItem(context, index + 1, state, textTheme);
+            final isStillLoading = snapshot.connectionState == ConnectionState.waiting;
+            return RefreshIndicator(
+              onRefresh: () async {
+                setState(() {
+                  _dashboardFuture = _loadDashboardData();
+                });
+                await _dashboardFuture;
               },
-              childCount: 4, // We are only showing the 4 summary cards
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-
-  Widget _buildItem(
-      BuildContext context,
-      int index,
-      AppState state,
-      TextTheme textTheme,
-      ) {
-    switch (index) {
-      case 0: // Welcome Card
-        return _buildWelcomeCard(state.loggedInUserName, textTheme);
-      case 1: // Total Customers
-        return _buildSummaryCard(
-          title: 'Total Customers',
-          value: state.totalCustomers().toString(),
-          icon: Icons.groups,
-          color: Colors.lightBlue,
-          textTheme: textTheme,
-        );
-      case 2: // Outstanding Loans
-        return _buildSummaryCard(
-          title: 'Total Outstanding',
-          value: 'GHS ${state.totalOutstanding().toStringAsFixed(2)}',
-          icon: Icons.account_balance_wallet,
-          color: Colors.orange,
-          textTheme: textTheme,
-        );
-      case 3: // Loans Today
-        return _buildSummaryCard(
-          title: 'Loans Today',
-          value: 'GHS ${state.getLoansToday().toStringAsFixed(2)}',
-          icon: Icons.today,
-          color: Colors.green,
-          textTheme: textTheme,
-        );
-      case 4: // Active Loans
-        return _buildSummaryCard(
-          title: 'Active Loans',
-          value: state.getActiveLoanCount().toString(),
-          icon: Icons.trending_up,
-          color: Colors.pink,
-          textTheme: textTheme,
-        );
-      case 5: // Quick Actions
-        return _buildQuickActionsCard(context, textTheme);
-      default:
-        return const SizedBox.shrink();
-    }
-  }
-
-  // The rest of your helper methods (_buildWelcomeCard, _buildSummaryCard, etc.)
-  // can remain exactly the same as you have them. I am including them here
-  // for completeness.
-
-  Widget _buildWelcomeCard(String email, TextTheme textTheme) {
-    return Padding(
-      padding: const EdgeInsets.all(12),
-      child: Stack(
-        children: [
-          Container(
-            constraints: const BoxConstraints(minHeight: 160),
-            decoration: const BoxDecoration(
-              image: DecorationImage(
-                image: AssetImage('assets/images/card_bg.jpg'),
-                fit: BoxFit.cover,
-                colorFilter: ColorFilter.mode(Colors.black45, BlendMode.darken),
-              ),
-              shape: BoxShape.rectangle,
-              borderRadius: BorderRadius.all(Radius.circular(12)),
-            ),
-          ),
-          Container(
-            constraints: const BoxConstraints(minHeight: 160),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  Colors.black,
-                  Colors.transparent,
-                  Colors.black,
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              shape: BoxShape.rectangle,
-              borderRadius: BorderRadius.all(Radius.circular(12)),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(20.0),
-            child: Container(
-              constraints: const BoxConstraints(minHeight: 140),
-              child: Padding(
-                padding: const EdgeInsets.all(10.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(0, 0, 0, 20),
+                children: [
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(18, 10, 18, 18),
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Color(0xFFF6E7E3), Color(0xFFF4ECE4)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.only(
+                        bottomLeft: Radius.circular(24),
+                        bottomRight: Radius.circular(24),
+                      ),
+                    ),
+                    child: Column(
                       children: [
-                        Text(
-                          'Welcome Back',
-                          style: textTheme.titleLarge?.copyWith(color: Colors.white, fontSize: 24),
+                        Row(
+                          children: [
+                            CircleAvatar(
+                              radius: 32,
+                              backgroundColor: Colors.white,
+                              child: Text(
+                                (state.loggedInUserName.isEmpty
+                                        ? "U"
+                                        : state.loggedInUserName[0])
+                                    .toUpperCase(),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 24,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    "Hello, ${state.loggedInUserName.isEmpty ? 'User' : state.loggedInUserName}",
+                                    style: const TextStyle(
+                                      fontSize: 24,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                  const Text(
+                                    "Welcome back",
+                                    style: TextStyle(color: Colors.black54),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            CircleAvatar(
+                              radius: 20,
+                              backgroundColor: Colors.white,
+                              child: Icon(
+                                Icons.notifications_none,
+                                color: Colors.grey.shade700,
+                              ),
+                            ),
+                          ],
                         ),
-                        FittedBox(
-                          fit: BoxFit.scaleDown,
+                        const SizedBox(height: 20),
+                        Text(
+                          AmountFormatter.compactCurrency(outstanding),
+                          style: const TextStyle(
+                            fontSize: 42,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        const Text(
+                          "Total Outstanding",
+                          style: TextStyle(fontSize: 20, color: Colors.black54),
+                        ),
+                        const SizedBox(height: 18),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceAround,
+                          children: [
+                            _quickActionButton(
+                              icon: Icons.arrow_outward,
+                              label: "Transfer",
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => const CustomersPage(),
+                                  ),
+                                );
+                              },
+                            ),
+                            _quickActionButton(
+                              icon: Icons.arrow_downward,
+                              label: "Withdraw",
+                            ),
+                            _quickActionButton(icon: Icons.add, label: "Top Up"),
+                            _quickActionButton(icon: Icons.grid_view, label: "More"),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Row(
+                      children: [
+                        const Expanded(
                           child: Text(
-                            email,
-                            style: textTheme.displaySmall?.copyWith(
-                                color: Colors.white, fontWeight: FontWeight.bold),
+                            "Transactions",
+                            style: TextStyle(
+                              fontSize: 30,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.black,
+                            ),
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: remainingTransactions.isEmpty
+                              ? null
+                              : () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => _AllTransactionsPage(
+                                        transactions: remainingTransactions,
+                                      ),
+                                    ),
+                                  );
+                                },
+                          child: const Text(
+                            "See all",
+                            style: TextStyle(fontWeight: FontWeight.w600),
                           ),
                         ),
                       ],
                     ),
-                  ],
-                ),
+                  ),
+                  if (latestTransactions.isEmpty && isStillLoading)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 26),
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                  else if (_transactionsError != null && latestTransactions.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 26),
+                      child: Center(
+                        child: Text(
+                          _transactionsError!,
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    )
+                  else if (latestTransactions.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 26),
+                      child: Center(child: Text("No transactions yet")),
+                    )
+                  else
+                    ...latestTransactions.map(
+                      (tx) => _buildTransactionCard(context, tx),
+                    ),
+                  const SizedBox(height: 90),
+                ],
               ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSummaryCard({
-    required String title,
-    required String value,
-    required IconData icon,
-    required Color color,
-    required TextTheme textTheme,
-  }) {
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      color: Colors.blueGrey.shade800,
-      child: Padding(
-        padding: const EdgeInsets.all(12.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Icon(icon, size: 32, color: color),
-            const SizedBox(height: 8),
-            Text(title, style: textTheme.bodyMedium?.copyWith(color: Colors.white70)),
-            Text(
-              value,
-              style: textTheme.titleLarge?.copyWith(
-                  color: Colors.white, fontWeight: FontWeight.bold),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
+            );
+          },
         ),
       ),
     );
   }
 
-  Widget _buildQuickActionsCard(BuildContext context, TextTheme textTheme) {
-    return Padding(
-      padding: const EdgeInsets.all(12.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(left: 8.0, bottom: 12.0),
-            child: Text(
-              'Quick Actions',
-              style: textTheme.titleMedium
-                  ?.copyWith(color: Colors.black,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 19),
-            ),
+  Widget _buildTransactionCard(
+    BuildContext context,
+    _DashboardTxn transaction,
+  ) {
+    final isLoan = transaction.isLoan;
+    final amountLabel = isLoan
+        ? "+${AmountFormatter.compactNumber(transaction.amount)}"
+        : "-${AmountFormatter.compactNumber(transaction.amount)}";
+
+    return Card(
+      margin: const EdgeInsets.fromLTRB(12, 6, 12, 8),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        leading: CircleAvatar(
+          radius: 22,
+          backgroundColor: Theme.of(context).colorScheme.secondary.withValues(alpha: 0.35),
+          child: _txnAvatarWidget(transaction),
+        ),
+        title: Text(
+          transaction.customerName,
+          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+        ),
+        subtitle: Text(
+          "${transaction.label} • ${_formatDate(transaction.date)}",
+          style: const TextStyle(fontSize: 12),
+        ),
+        trailing: Text(
+          "GHS $amountLabel",
+          style: TextStyle(
+            fontWeight: FontWeight.w700,
+            color: isLoan ? Colors.green.shade700 : Colors.red.shade700,
           ),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _quickActionButton(
-                context,
-                icon: Icons.people_alt_outlined,
-                color: Colors.red,
-                color2: Colors.red,
-                label: 'Customers',
-                onPressed: () => Navigator.push(context,
-                    MaterialPageRoute(builder: (c) => const CustomersPage())),
-              ),
-              _quickActionButton(
-                context,
-                icon: Icons.bar_chart_outlined,
-                color: Colors.purple,
-                color2: Colors.purple,
-                label: 'Reports',
-                onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Reports: Coming later'))),
-              ),
-              _quickActionButton(
-                context,
-                icon: Icons.download_outlined,
-                color: Colors.green,
-                color2: Colors.green,
-                label: 'Export',
-                onPressed: () {
-                  // This is the change!
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (c) => const ExportDataPage()),
-                  );
-                },
-                // onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                //     const SnackBar(content: Text('Export: Coming later'))),
-              ),
-              _quickActionButton(
-                context,
-                icon: Icons.settings_outlined,
-                color: Colors.black,
-                label: 'Settings',
-                color2: Colors.black,
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (c) => const SettingsPage()),
-                  );
-                },
-              ),
-            ],
-          ),
-        ],
+        ),
       ),
     );
   }
 
-  Widget _quickActionButton(BuildContext context,
-      {
-        required IconData icon,
-        required String label,
-        required Color color,
-        required Color color2,
-        VoidCallback? onPressed
-      }) {
+  Future<void> _loadDashboardData() async {
+    final state = context.read<AppState>();
+    _transactionsError = null;
+    await state.loadDashboardMetricsFromApi();
+
+    try {
+      final transactions = await _repaymentsApiService.fetchAllTransactions();
+      final tx = <_DashboardTxn>[];
+
+      for (final item in transactions) {
+        final loanType = (item['loanType'] ?? '').toString().trim();
+        final customerName = (item['customerName'] ?? '').toString().trim();
+        final notes = (item['notes'] ?? '').toString().trim();
+        final label = loanType.isEmpty ? 'Transaction' : '$loanType Repayment';
+        final lowerNotes = notes.toLowerCase();
+        final isLoan = lowerNotes.contains('loan disbursed') ||
+            lowerNotes.contains('new loan');
+
+        tx.add(
+          _DashboardTxn(
+            customerId: (item['customerId'] ?? '').toString(),
+            customerName: customerName.isEmpty ? 'Unknown customer' : customerName,
+            customerProfileImage: item['customerProfileImage']?.toString(),
+            amount: _numFrom(item, const ['amountPaid', 'amount', 'paymentAmount']),
+            date: _dateFrom(
+              item,
+              const ['paymentDate', 'date', 'createdAt', 'transactionDate'],
+            ),
+            isLoan: isLoan,
+            label: label,
+          ),
+        );
+      }
+
+      tx.sort((a, b) => _parseDate(b.date).compareTo(_parseDate(a.date)));
+      if (!mounted) return;
+      setState(() {
+        _allTransactions = tx;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _allTransactions = const [];
+        _transactionsError = 'Failed to load transactions.';
+      });
+    }
+  }
+
+  double _numFrom(Map<String, dynamic> map, List<String> keys) {
+    for (final key in keys) {
+      final value = map[key];
+      if (value is num) return value.toDouble();
+      if (value is String) {
+        final parsed = double.tryParse(value);
+        if (parsed != null) return parsed;
+      }
+    }
+    return 0;
+  }
+
+  String _dateFrom(Map<String, dynamic> map, List<String> keys) {
+    for (final key in keys) {
+      final value = map[key];
+      if (value == null) continue;
+      final text = value.toString();
+      if (text.isNotEmpty) return text;
+    }
+    return DateTime.now().toIso8601String();
+  }
+
+  DateTime _parseDate(String value) {
+    return DateTime.tryParse(value) ?? DateTime.fromMillisecondsSinceEpoch(0);
+  }
+
+  String _formatDate(String value) {
+    final parsed = DateTime.tryParse(value);
+    if (parsed == null) return value;
+    final m = parsed.month.toString().padLeft(2, '0');
+    final d = parsed.day.toString().padLeft(2, '0');
+    return "${parsed.year}-$m-$d";
+  }
+
+  Widget _quickActionButton({
+    required IconData icon,
+    required String label,
+    VoidCallback? onTap,
+  }) {
     return InkWell(
-      onTap: onPressed,
-      borderRadius: BorderRadius.circular(8),
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(30),
       child: Padding(
-        padding: const EdgeInsets.all(8.0),
+        padding: const EdgeInsets.symmetric(horizontal: 2),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: color, size: 28),
+            CircleAvatar(
+              radius: 22,
+              backgroundColor: Colors.white,
+              child: Icon(icon, color: Colors.black87),
+            ),
             const SizedBox(height: 6),
             Text(
               label,
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: color2,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14),
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ],
         ),
       ),
     );
   }
+}
 
-  SpeedDial _buildSpeedDial(BuildContext context) {
-    final state = Provider.of<AppState>(context, listen: false);
-    return SpeedDial(
-      icon: Icons.question_mark,
-      activeIcon: Icons.close,
-      backgroundColor: Colors.indigo,
-      foregroundColor: Colors.white,
-      overlayColor: Colors.black,
-      overlayOpacity: 0.5,
-      spacing: 12,
-      spaceBetweenChildren: 12,
-      children: [
-        SpeedDialChild(
-          child: const Icon(Icons.person_add),
-          label: 'New Customer',
-          backgroundColor: Colors.lightBlue,
-          onTap: () {
-            // Navigator.push(
-            //   context,
-            //   MaterialPageRoute(
-            //     builder: (c) => const CustomersPage(openAddCustomer: true),
-            //   ),
-            // );
-          },
-        ),
-        SpeedDialChild(
-          child: const Icon(Icons.post_add),
-          label: 'New Loan',
-          backgroundColor: Colors.green,
-          onTap: () {
-            Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (c) => const CustomersPage(openForLoan: true)));
-          },
-        ),
-        SpeedDialChild(
-          child: const Icon(Icons.payment),
-          label: 'Add Repayment',
-          backgroundColor: Colors.orange,
-          onTap: () {
-            // Navigator.push(
-            //   context,
-            //   MaterialPageRoute(
-            //     builder: (c) => const CustomersPage(openForRepayment: true),
-            //   ),
-            // );
-          },
-        ),
-        SpeedDialChild(
-          child: const Icon(Icons.logout),
-          label: 'Logout',
-          backgroundColor: Colors.red.shade400,
-          onTap: () async {
-            await state.logout();
-            Navigator.of(context).popUntil((route) => route.isFirst);
-          },
-        ),
-      ],
+class _AllTransactionsPage extends StatelessWidget {
+  const _AllTransactionsPage({required this.transactions});
+
+  final List<_DashboardTxn> transactions;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text("All Transactions")),
+      body: transactions.isEmpty
+          ? const Center(child: Text("No transactions available"))
+          : ListView.builder(
+              padding: const EdgeInsets.fromLTRB(10, 10, 10, 16),
+              itemCount: transactions.length,
+              itemBuilder: (context, index) {
+                final transaction = transactions[index];
+                final isLoan = transaction.isLoan;
+                final amountLabel = isLoan
+                    ? "+${AmountFormatter.compactNumber(transaction.amount)}"
+                    : "-${AmountFormatter.compactNumber(transaction.amount)}";
+
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  child: ListTile(
+                    leading: CircleAvatar(
+                      radius: 20,
+                      backgroundColor: Theme.of(
+                        context,
+                      ).colorScheme.secondary.withValues(alpha: 0.35),
+                      child: _txnAvatarWidget(transaction),
+                    ),
+                    title: Text(
+                      transaction.customerName,
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    subtitle: Text(
+                      "${transaction.label} • ${_readableDateTime(transaction.date)}",
+                    ),
+                    trailing: Text(
+                      "GHS $amountLabel",
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: isLoan ? Colors.green.shade700 : Colors.red.shade700,
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
     );
   }
+}
+
+class _DashboardTxn {
+  const _DashboardTxn({
+    required this.customerId,
+    required this.customerName,
+    required this.customerProfileImage,
+    required this.amount,
+    required this.date,
+    required this.isLoan,
+    required this.label,
+  });
+
+  final String customerId;
+  final String customerName;
+  final String? customerProfileImage;
+  final double amount;
+  final String date;
+  final bool isLoan;
+  final String label;
+}
+
+Widget _txnAvatarWidget(_DashboardTxn transaction) {
+  final bytes = _profileImageBytes(transaction.customerProfileImage);
+  if (bytes != null) {
+    return ClipOval(
+      child: Image.memory(
+        bytes,
+        width: 44,
+        height: 44,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) {
+          return Text(
+            _initialForName(transaction.customerName),
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          );
+        },
+      ),
+    );
+  }
+
+  return Text(
+    _initialForName(transaction.customerName),
+    style: const TextStyle(fontWeight: FontWeight.bold),
+  );
+}
+
+Uint8List? _profileImageBytes(String? rawValue) {
+  if (rawValue == null || rawValue.trim().isEmpty) return null;
+  var base64Value = rawValue.trim();
+  final commaIndex = base64Value.indexOf(',');
+  if (base64Value.startsWith('data:image') && commaIndex != -1) {
+    base64Value = base64Value.substring(commaIndex + 1);
+  }
+  try {
+    return base64Decode(base64Value);
+  } catch (_) {
+    return null;
+  }
+}
+
+String _initialForName(String? name) {
+  if (name == null || name.trim().isEmpty) return "U";
+  return name.trim()[0].toUpperCase();
+}
+
+String _readableDateTime(String value) {
+  final parsed = DateTime.tryParse(value);
+  if (parsed == null) return value;
+
+  const months = <String>[
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+
+  final month = months[parsed.month - 1];
+  final day = parsed.day;
+  final year = parsed.year;
+  final hour24 = parsed.hour;
+  final minute = parsed.minute.toString().padLeft(2, '0');
+  final period = hour24 >= 12 ? 'PM' : 'AM';
+  final hour12 = (hour24 % 12 == 0) ? 12 : hour24 % 12;
+
+  return '$month $day, $year • $hour12:$minute $period';
 }

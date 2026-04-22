@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../state/app_state.dart';
-import 'dashboard_page.dart';
+import 'app_shell_page.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -35,6 +35,7 @@ class _LoginPageState extends State<LoginPage> {
       });
     }
   }
+
   Future<void> _handleBiometricLogin() async {
     setState(() => _loading = true);
     final appState = Provider.of<AppState>(context, listen: false);
@@ -46,7 +47,7 @@ class _LoginPageState extends State<LoginPage> {
     if (success) {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (c) => const DashboardPage()),
+        MaterialPageRoute(builder: (c) => const AppShellPage()),
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -91,12 +92,13 @@ class _LoginPageState extends State<LoginPage> {
     if (success) {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (c) => const DashboardPage()),
+        MaterialPageRoute(builder: (c) => const AppShellPage()),
       );
     } else {
       final message = _isLogin ? 'Login failed' : 'Sign up failed';
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(message)));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
     }
   }
 
@@ -116,149 +118,155 @@ class _LoginPageState extends State<LoginPage> {
           child: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 24.0),
             child:
-            // *** FIX IS HERE: Wrap the Column in a Card ***
-            Card(
-              elevation: 8,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16.0),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(24.0),
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // --- Avatar ---
-                      const CircleAvatar(
-                        radius: 50, // Reduced size to fit nicely in the card
-                        backgroundImage:
-                        AssetImage('assets/images/auth.jpg'),
-                        backgroundColor: Colors.transparent,
-                      ),
-                      const SizedBox(height: 16),
-
-                      // --- Title ---
-                      Text(
-                        _isLogin ? 'Welcome Back!' : 'Create Account',
-                        style: const TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-
-                      // --- Form Fields ---
-                      if (!_isLogin)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 16.0),
-                          child: _buildTextFormField(
-                            controller: _nameCtl,
-                            label: 'Full Name',
-                            icon: Icons.person,
-                            validator: (v) => (v == null || v.isEmpty)
-                                ? 'Name is required'
-                                : null,
+                // *** FIX IS HERE: Wrap the Column in a Card ***
+                Card(
+                  elevation: 8,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16.0),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(24.0),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // --- Avatar ---
+                          const CircleAvatar(
+                            radius:
+                                50, // Reduced size to fit nicely in the card
+                            backgroundImage: AssetImage(
+                              'assets/images/auth.jpg',
+                            ),
+                            backgroundColor: Colors.transparent,
                           ),
-                        ),
-                      _buildTextFormField(
-                        controller: _emailCtl,
-                        label: 'Email',
-                        icon: Icons.email,
-                        keyboardType: TextInputType.emailAddress,
-                        validator: (v) {
-                          if (v == null || v.isEmpty) {
-                            return 'Email is required';
-                          }
-                          final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+');
-                          if (!emailRegex.hasMatch(v)) {
-                            return 'Enter a valid email';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 16),
-                      _buildTextFormField(
-                        controller: _passCtl,
-                        isPassword: true,
-                        label: 'Password',
-                        icon: Icons.lock,
-                        validator: (v) {
-                          if (v == null || v.isEmpty) {
-                            return 'Password is required';
-                          }
-                          if (v.length < 6) {
-                            return 'Password must be at least 6 characters';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 32),
+                          const SizedBox(height: 16),
 
-                      // --- Submit Button or Loader ---
-                      _loading
-                          ? const CircularProgressIndicator()
-                          : SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.indigo,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(
-                                vertical: 16),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12.0),
+                          // --- Title ---
+                          Text(
+                            _isLogin ? 'Welcome Back!' : 'Create Account',
+                            style: const TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
                             ),
                           ),
-                          onPressed: _submit,
-                          child: Text(
-                            _isLogin ? 'Login' : 'Sign Up',
-                            style: const TextStyle(fontSize: 18),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      // --- Biometric Login Button ---
-                      if (_isLogin && _canUseBiometrics)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 16.0),
-                          child: OutlinedButton.icon(
-                            icon: const Icon(Icons.fingerprint),
-                            label: const Text('Login with Biometrics'),
-                            style: OutlinedButton.styleFrom(
-                              minimumSize: const Size(double.infinity, 50),
-                              foregroundColor: Colors.indigo,
-                              side: const BorderSide(color: Colors.indigo),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12.0),
+                          const SizedBox(height: 24),
+
+                          // --- Form Fields ---
+                          if (!_isLogin)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 16.0),
+                              child: _buildTextFormField(
+                                controller: _nameCtl,
+                                label: 'Full Name',
+                                icon: Icons.person,
+                                validator: (v) => (v == null || v.isEmpty)
+                                    ? 'Name is required'
+                                    : null,
                               ),
                             ),
-                            onPressed: _handleBiometricLogin,
+                          _buildTextFormField(
+                            controller: _emailCtl,
+                            label: 'Email',
+                            icon: Icons.email,
+                            keyboardType: TextInputType.emailAddress,
+                            validator: (v) {
+                              if (v == null || v.isEmpty) {
+                                return 'Email is required';
+                              }
+                              final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+');
+                              if (!emailRegex.hasMatch(v)) {
+                                return 'Enter a valid email';
+                              }
+                              return null;
+                            },
                           ),
-                        ),
-                      const SizedBox(height: 16),
+                          const SizedBox(height: 16),
+                          _buildTextFormField(
+                            controller: _passCtl,
+                            isPassword: true,
+                            label: 'Password',
+                            icon: Icons.lock,
+                            validator: (v) {
+                              if (v == null || v.isEmpty) {
+                                return 'Password is required';
+                              }
+                              if (v.length < 6) {
+                                return 'Password must be at least 6 characters';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 32),
 
-                      // --- Toggle Button ---
-                      TextButton(
-                        onPressed: _toggleFormType,
-                        child: Text(
-                          _isLogin
-                              ? 'Don\'t have an account? Sign Up'
-                              : 'Already have an account? Login',
-                          style: TextStyle(color: Colors.indigo.shade700),
-                        ),
-                      )
-                    ],
+                          // --- Submit Button or Loader ---
+                          _loading
+                              ? const CircularProgressIndicator()
+                              : SizedBox(
+                                  width: double.infinity,
+                                  child: ElevatedButton(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.indigo,
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 16,
+                                      ),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(
+                                          12.0,
+                                        ),
+                                      ),
+                                    ),
+                                    onPressed: _submit,
+                                    child: Text(
+                                      _isLogin ? 'Login' : 'Sign Up',
+                                      style: const TextStyle(fontSize: 18),
+                                    ),
+                                  ),
+                                ),
+                          const SizedBox(height: 6),
+                          // --- Biometric Login Button ---
+                          if (_isLogin && _canUseBiometrics)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 16.0),
+                              child: OutlinedButton.icon(
+                                icon: const Icon(Icons.fingerprint),
+                                label: const Text('Login with Biometrics'),
+                                style: OutlinedButton.styleFrom(
+                                  minimumSize: const Size(double.infinity, 50),
+                                  foregroundColor: Colors.indigo,
+                                  side: const BorderSide(color: Colors.indigo),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12.0),
+                                  ),
+                                ),
+                                onPressed: _handleBiometricLogin,
+                              ),
+                            ),
+                          const SizedBox(height: 16),
+
+                          // --- Toggle Button ---
+                          TextButton(
+                            onPressed: _toggleFormType,
+                            child: Text(
+                              _isLogin
+                                  ? 'Don\'t have an account? Sign Up'
+                                  : 'Already have an account? Login',
+                              style: TextStyle(color: Colors.indigo.shade700),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
-              ),
-            ),
           ),
         ),
       ),
     );
   }
+
   TextFormField _buildTextFormField({
     required TextEditingController controller,
     required String label,
@@ -277,21 +285,19 @@ class _LoginPageState extends State<LoginPage> {
 
         suffixIcon: isPassword
             ? IconButton(
-          icon: Icon(
-            _showPassword ? Icons.visibility : Icons.visibility_off,
-            color: Colors.grey.shade600,
-          ),
-          onPressed: () {
-            setState(() {
-              _showPassword = !_showPassword;
-            });
-          },
-        )
+                icon: Icon(
+                  _showPassword ? Icons.visibility : Icons.visibility_off,
+                  color: Colors.grey.shade600,
+                ),
+                onPressed: () {
+                  setState(() {
+                    _showPassword = !_showPassword;
+                  });
+                },
+              )
             : null,
 
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12.0),
-        ),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12.0)),
         filled: true,
         fillColor: Colors.grey.shade100,
       ),

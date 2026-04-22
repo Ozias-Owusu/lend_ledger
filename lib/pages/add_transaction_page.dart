@@ -11,6 +11,7 @@ import 'package:lend_ledger/services/repayments_api_service.dart';
 import 'package:lend_ledger/services/soft_loans_api_service.dart';
 import 'package:provider/provider.dart';
 import '../state/app_state.dart';
+import '../utils/amount_formatter.dart';
 
 // Enum for clarity in duration units
 enum DurationUnit { days, weeks, months }
@@ -19,12 +20,16 @@ class AddTransactionPage extends StatefulWidget {
   final Customer customer;
   final TransactionType? preselectedType;
   final String? preselectedLoanKind;
+  final bool enableCustomDateTime;
+  final DateTime? initialDateTime;
 
   const AddTransactionPage({
     super.key,
     required this.customer,
     this.preselectedType,
     this.preselectedLoanKind,
+    this.enableCustomDateTime = false,
+    this.initialDateTime,
   });
 
   @override
@@ -50,11 +55,13 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
   final DailyLoansApiService _dailyLoansApiService = DailyLoansApiService();
   final SoftLoansApiService _softLoansApiService = SoftLoansApiService();
   final RepaymentsApiService _repaymentsApiService = RepaymentsApiService();
-  bool _isPostingRepayment = false;
+  bool _isSavingTransaction = false;
+  late DateTime _selectedDateTime;
 
   @override
   void initState() {
     super.initState();
+    _selectedDateTime = widget.initialDateTime ?? DateTime.now();
     _type = widget.preselectedType ?? TransactionType.loan;
     _loanKind = widget.preselectedLoanKind ?? 'Daily Loan';
 
@@ -177,7 +184,7 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
 
   // --- SAVE TRANSACTION ---
   Future<void> _saveTransaction() async {
-    if (_isPostingRepayment) return;
+    if (_isSavingTransaction) return;
     final amount = double.tryParse(_amountCtl.text);
     if (amount == null || amount <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -199,7 +206,7 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
             SnackBar(
               backgroundColor: Colors.red,
               content: Text(
-                "Amount cannot exceed the installment of GHS ${_selectedInstallment!.amount.toStringAsFixed(2)}",
+                "Amount cannot exceed the installment of ${AmountFormatter.compactCurrency(_selectedInstallment!.amount)}",
               ),
             ),
           );
@@ -210,7 +217,7 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
           SnackBar(
             backgroundColor: Colors.red,
             content: Text(
-              "Repayment can't exceed balance of GHS ${_selectedLoan!.remainingAmount.toStringAsFixed(2)}.",
+              "Repayment can't exceed balance of ${AmountFormatter.compactCurrency(_selectedLoan!.remainingAmount)}.",
             ),
           ),
         );
@@ -219,9 +226,11 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
     }
 
     final appState = Provider.of<AppState>(context, listen: false);
+    final transactionDate = widget.enableCustomDateTime
+        ? _selectedDateTime
+        : DateTime.now();
 
     if (_type == TransactionType.repayment) {
-      final now = DateTime.now();
       final selected = _selectedLoan!;
       final installmentNumber = _selectedInstallment == null
           ? 0
@@ -230,13 +239,13 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                 ) +
                 1);
       try {
-        setState(() => _isPostingRepayment = true);
+        setState(() => _isSavingTransaction = true);
         await _repaymentsApiService.createRepayment(
           customerId: widget.customer.id,
           loanType: _apiLoanType(selected.loanKind),
           loanId: selected.id,
           amountPaid: amount,
-          paymentDateIso: now.toIso8601String(),
+          paymentDateIso: transactionDate.toIso8601String(),
           installmentNumber: installmentNumber < 0 ? 0 : installmentNumber,
           notes: _selectedInstallment == null
               ? 'Repayment for loan ${selected.id}'
@@ -258,7 +267,7 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
         }
       } finally {
         if (mounted) {
-          setState(() => _isPostingRepayment = false);
+          setState(() => _isSavingTransaction = false);
         }
       }
       return;
@@ -266,12 +275,12 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
 
     if (_type == TransactionType.loan && _loanKind == 'daily') {
       final transactionId = appState.generateUUID();
-      final now = DateTime.now();
       final interestRateDecimal = _interestPercent / 100;
       final interestAmount = amount * interestRateDecimal;
       final totalRepayableAmount = amount + interestAmount;
 
       try {
+        setState(() => _isSavingTransaction = true);
         await _dailyLoansApiService.createDailyLoan(
           id: transactionId,
           customerId: widget.customer.id,
@@ -279,8 +288,8 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
           interestRateDecimal: interestRateDecimal,
           interestAmount: interestAmount,
           totalRepayableAmount: totalRepayableAmount,
-          loanDateIso: now.toIso8601String(),
-          dueDateIso: now.add(const Duration(days: 1)).toIso8601String(),
+          loanDateIso: transactionDate.toIso8601String(),
+          dueDateIso: transactionDate.add(const Duration(days: 1)).toIso8601String(),
           status: 'Active',
           notes: '',
         );
@@ -298,24 +307,26 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
             SnackBar(content: Text("Failed to create daily loan: $e")),
           );
         }
+      } finally {
+        if (mounted) setState(() => _isSavingTransaction = false);
       }
       return;
     }
 
     if (_type == TransactionType.loan && _loanKind == 'soft') {
-      final now = DateTime.now();
       final durationValue = int.tryParse(_durationCtl.text) ?? 1;
       final safeDuration = durationValue <= 0 ? 1 : durationValue;
       final interestRateDecimal = _interestPercent / 100;
 
       try {
+        setState(() => _isSavingTransaction = true);
         await _softLoansApiService.createSoftLoan(
           customerId: widget.customer.id,
           principalAmount: amount,
           interestRateDecimal: interestRateDecimal,
           durationValue: safeDuration,
           durationUnit: _durationUnitLabel(_durationUnit),
-          loanStartDateIso: now.toIso8601String(),
+          loanStartDateIso: transactionDate.toIso8601String(),
           notes: '',
         );
 
@@ -332,6 +343,8 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
             SnackBar(content: Text("Failed to create soft loan: $e")),
           );
         }
+      } finally {
+        if (mounted) setState(() => _isSavingTransaction = false);
       }
       return;
     }
@@ -362,13 +375,13 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
           : _loanKind,
       amount: finalAmount,
       interestPercent: interestToSave,
-      date: DateTime.now().toIso8601String(),
+      date: transactionDate.toIso8601String(),
       note: note,
     );
     if (mounted) Navigator.pop(context);
   }
 
-  String _calculateEndDate(int value, DurationUnit unit) {
+  String _calculateEndDate(int value, DurationUnit unit, DateTime baseDate) {
     Duration duration;
     switch (unit) {
       case DurationUnit.days:
@@ -381,7 +394,7 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
         duration = Duration(days: value * 30); // Approximation
         break;
     }
-    return DateFormat('dd MMM, yyyy').format(DateTime.now().add(duration));
+    return DateFormat('dd MMM, yyyy').format(baseDate.add(duration));
   }
 
   String _durationUnitLabel(DurationUnit unit) {
@@ -429,7 +442,10 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
 
     if (isSoftLoan && durationValue > 0) {
       installmentAmount = totalRepayable / durationValue;
-      loanEndDate = _calculateEndDate(durationValue, _durationUnit);
+      final baseDate = widget.enableCustomDateTime
+          ? _selectedDateTime
+          : DateTime.now();
+      loanEndDate = _calculateEndDate(durationValue, _durationUnit, baseDate);
       switch (_durationUnit) {
         case DurationUnit.days:
           installmentLabel = 'Daily Payment:';
@@ -469,7 +485,7 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      "GHS ${_outstandingBalance.toStringAsFixed(2)}",
+                      AmountFormatter.compactCurrency(_outstandingBalance),
                       style: const TextStyle(
                         fontSize: 28,
                         fontWeight: FontWeight.bold,
@@ -614,7 +630,7 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                     Expanded(
                       flex: 3,
                       child: DropdownButtonFormField<DurationUnit>(
-                        value: _durationUnit,
+                        initialValue: _durationUnit,
                         items: const [
                           DropdownMenuItem(
                             value: DurationUnit.days,
@@ -649,13 +665,13 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                     children: [
                       _summaryRow(
                         "Total Repayable:",
-                        "GHS ${totalRepayable.toStringAsFixed(2)}",
+                        AmountFormatter.compactCurrency(totalRepayable),
                       ),
                       if (isSoftLoan) ...[
                         const Divider(height: 20),
                         _summaryRow(
                           installmentLabel,
-                          "GHS ${installmentAmount.toStringAsFixed(2)}",
+                          AmountFormatter.compactCurrency(installmentAmount),
                         ),
                         const Divider(height: 20),
                         _summaryRow("Loan End Date:", loanEndDate),
@@ -665,15 +681,19 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                 ),
               ),
             ],
+            if (widget.enableCustomDateTime) ...[
+              const SizedBox(height: 18),
+              _buildCustomDateTimePicker(isRepayment: isRepayment),
+            ],
           ],
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed:
-            (_customerLoans.isEmpty && isRepayment) || _isPostingRepayment
+            (_customerLoans.isEmpty && isRepayment) || _isSavingTransaction
             ? null
             : _saveTransaction,
-        icon: _isPostingRepayment
+        icon: _isSavingTransaction
             ? const SizedBox(
                 width: 18,
                 height: 18,
@@ -683,9 +703,74 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                 ),
               )
             : const Icon(Icons.save),
-        label: Text(_isPostingRepayment ? "Saving..." : "Save Transaction"),
+        label: Text(_isSavingTransaction ? "Saving..." : "Save Transaction"),
       ),
     );
+  }
+
+  Widget _buildCustomDateTimePicker({required bool isRepayment}) {
+    final label = isRepayment
+        ? 'Payment Date & Time'
+        : 'Transaction Date & Time';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 10),
+        InkWell(
+          onTap: _pickTransactionDateTime,
+          borderRadius: BorderRadius.circular(10),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.grey.shade300),
+              color: Colors.white,
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.event_outlined, size: 20),
+                const SizedBox(width: 10),
+                Text(
+                  DateFormat('dd MMM, yyyy - hh:mm a').format(_selectedDateTime),
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _pickTransactionDateTime() async {
+    final pickedDate = await showDatePicker(
+      context: context,
+      initialDate: _selectedDateTime,
+      firstDate: DateTime(1990),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+    );
+    if (pickedDate == null || !mounted) return;
+
+    final pickedTime = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(_selectedDateTime),
+    );
+    if (pickedTime == null || !mounted) return;
+
+    setState(() {
+      _selectedDateTime = DateTime(
+        pickedDate.year,
+        pickedDate.month,
+        pickedDate.day,
+        pickedTime.hour,
+        pickedTime.minute,
+      );
+    });
   }
 
   Widget _buildInstallmentSection() {
@@ -714,7 +799,7 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
               ),
             ),
             child: ListTile(
-              title: Text("GHS ${installment.amount.toStringAsFixed(2)}"),
+              title: Text(AmountFormatter.compactCurrency(installment.amount)),
               subtitle: Text(
                 "Due on: ${DateFormat('dd MMM, yyyy').format(installment.dueDate)}",
               ),
@@ -735,7 +820,7 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
               },
             ),
           );
-        }).toList(),
+        }),
       ],
     );
   }
@@ -803,10 +888,12 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                                 ),
                               ),
                               subtitle: Text(
-                                'Balance: GHS ${loan.remainingAmount.toStringAsFixed(2)}\nDate: $formattedDate',
+                                'Balance: ${AmountFormatter.compactCurrency(loan.remainingAmount)}\nDate: $formattedDate',
                               ),
                               trailing: Text(
-                                'GHS ${loan.remainingAmount.toStringAsFixed(2)}',
+                                AmountFormatter.compactCurrency(
+                                  loan.remainingAmount,
+                                ),
                                 style: const TextStyle(
                                   fontWeight: FontWeight.bold,
                                   color: Colors.indigo,
@@ -830,14 +917,13 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
   }
 
   String _formatLoanDisplay(LoanRecord loan) {
-    final currencySymbol = 'GHS';
     final loanBalance = loan.remainingAmount;
     final loanDate = DateTime.tryParse(loan.date);
     final formattedDate = loanDate != null
         ? DateFormat('dd/MM/yyyy').format(loanDate)
         : "Unknown Date";
     final status = loan.isOverdue ? ' (Overdue)' : '';
-    return '${loan.loanKind.toUpperCase()}: $currencySymbol${loanBalance.toStringAsFixed(2)} - Due: $formattedDate$status';
+    return '${loan.loanKind.toUpperCase()}: ${AmountFormatter.compactCurrency(loanBalance)} - Due: $formattedDate$status';
   }
 
   double _num(dynamic value) {

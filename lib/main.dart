@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:lend_ledger/pages/dashboard_page.dart';
+import 'package:lend_ledger/pages/app_shell_page.dart';
 import 'package:lend_ledger/pages/landing_page.dart';
-import 'package:lend_ledger/pages/login_page.dart';
 import 'package:lend_ledger/state/app_state.dart';
+import 'package:lend_ledger/theme/theme.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -22,10 +22,11 @@ void main() async {
 
   runApp(MyApp(appState: appState, isLoggedIn: isLoggedIn));
 }
+
 // Function to request necessary permissions
 Future<void> _requestPermissions() async {
   // Request multiple permissions at once.
-  Map<Permission, PermissionStatus> statuses = await [
+  await [
     Permission.camera,
     Permission.storage,
     Permission.photos, // Recommended for iOS
@@ -48,17 +49,12 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Retrieves the default theme for the platform
-  TextTheme textTheme = Theme.of(context).textTheme;
-
-    // Use with Google Fonts package to use downloadable fonts
-    // TextTheme textTheme = createTextTheme(context, "Montez", "Noto Sans Mro");
     return ChangeNotifierProvider.value(
       value: appState,
       child: MaterialApp(
         title: 'Loan Management',
-        theme: ThemeData(primarySwatch: Colors.blue),
-        home: isLoggedIn ? LoginPage(): LandingPage(),
+        theme: AppTheme.light(),
+        home: isLoggedIn ? const AppShellPage() : const LandingPage(),
         // home: LandingPage(),
         debugShowCheckedModeBanner: false,
       ),

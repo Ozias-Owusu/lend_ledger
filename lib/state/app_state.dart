@@ -383,8 +383,10 @@ import 'package:lend_ledger/db/customers_dao.dart';
 import 'package:lend_ledger/db/transaction_dao.dart';
 import 'package:lend_ledger/models/customer.dart';
 import 'package:lend_ledger/models/loan_record.dart';
+import 'package:lend_ledger/models/loan_metrics.dart';
 import 'package:lend_ledger/models/transactionRecord.dart';
 import 'package:lend_ledger/services/customers_api_service.dart';
+import 'package:lend_ledger/services/loan_metrics_api_service.dart';
 import 'package:uuid/uuid.dart';
 import 'package:local_auth/local_auth.dart';
 
@@ -396,12 +398,15 @@ class AppState extends ChangeNotifier {
   final TransactionsDao _transactionsDao = TransactionsDao();
   final SoftLoanDao _softLoanDao = SoftLoanDao();
   final CustomersApiService _customersApiService = CustomersApiService();
+  final LoanMetricsApiService _loanMetricsApiService = LoanMetricsApiService();
   final LocalAuthentication auth = LocalAuthentication();
 
   // --- In-memory state ---
   List<Customer> customers = [];
   List<Customer> apiCustomers = [];
   String? customersApiError;
+  LoanMetrics? dashboardMetrics;
+  String? dashboardMetricsError;
   List<TransactionRecord> transactions = [];
   bool isLoggedIn = false;
   String loggedInEmail = '';
@@ -425,6 +430,17 @@ class AppState extends ChangeNotifier {
     } catch (e) {
       customersApiError = e.toString();
       apiCustomers = [];
+    }
+    notifyListeners();
+  }
+
+  Future<void> loadDashboardMetricsFromApi() async {
+    dashboardMetricsError = null;
+    try {
+      dashboardMetrics = await _loanMetricsApiService.fetchActiveTotals();
+    } catch (e) {
+      dashboardMetricsError = e.toString();
+      dashboardMetrics = null;
     }
     notifyListeners();
   }
@@ -511,7 +527,7 @@ class AppState extends ChangeNotifier {
         //   biometricOnly: true,
         //   stickyAuth: true,
         // ),
-        biometricOnly: true
+        biometricOnly: true,
       );
       if (didAuthenticate) {
         final sp = await SharedPreferences.getInstance();
@@ -675,18 +691,24 @@ class AppState extends ChangeNotifier {
     await loadFromDb();
   }
 
-
   // --- Loan & Installment Logic ---
   Future<List<Installment>> getInstallmentsForLoan(LoanRecord loan) async {
     if (loan.loanKind != 'soft') return [];
     final details = await _softLoanDao.getSoftLoanDetails(loan.id);
     if (details == null) return [];
 
-    final customerTransactions = await _transactionsDao.getTransactionsForCustomer(loan.customerId);
+    final customerTransactions = await _transactionsDao
+        .getTransactionsForCustomer(loan.customerId);
     final repaymentsForThisLoan = customerTransactions
-        .where((t) => t.type == TransactionType.repayment && t.note.contains(loan.id))
+        .where(
+          (t) =>
+              t.type == TransactionType.repayment && t.note.contains(loan.id),
+        )
         .toList();
-    double totalRepaidForThisLoan = repaymentsForThisLoan.fold(0.0, (sum, t) => sum + t.amount);
+    double totalRepaidForThisLoan = repaymentsForThisLoan.fold(
+      0.0,
+      (sum, t) => sum + t.amount,
+    );
 
     int durationValue = int.tryParse(details.loanDuration.split(' ')[0]) ?? 1;
     String unit = details.loanDuration.split(' ')[1];
@@ -703,8 +725,11 @@ class AppState extends ChangeNotifier {
         dueDate = DateTime(loanDate.year, loanDate.month + i, loanDate.day);
       }
 
-      double amountAlreadyPaidForThisInstallment = (totalRepaidForThisLoan - (details.installmentAmount * (i - 1))).clamp(0.0, details.installmentAmount);
-      double remainingForThisInstallment = details.installmentAmount - amountAlreadyPaidForThisInstallment;
+      double amountAlreadyPaidForThisInstallment =
+          (totalRepaidForThisLoan - (details.installmentAmount * (i - 1)))
+              .clamp(0.0, details.installmentAmount);
+      double remainingForThisInstallment =
+          details.installmentAmount - amountAlreadyPaidForThisInstallment;
       String status;
 
       if (remainingForThisInstallment <= 0.01) {
@@ -715,26 +740,34 @@ class AppState extends ChangeNotifier {
         status = "Upcoming";
       }
 
-      installments.add(Installment(
-        dueDate: dueDate,
-        amount: remainingForThisInstallment,
-        status: status,
-      ));
+      installments.add(
+        Installment(
+          dueDate: dueDate,
+          amount: remainingForThisInstallment,
+          status: status,
+        ),
+      );
     }
     return installments;
   }
 
   Future<List<LoanRecord>> getCustomerLoans(String customerId) async {
-    final customerTransactions = await _transactionsDao.getTransactionsForCustomer(customerId);
-    final allRepayments = customerTransactions.where((t) => t.type == TransactionType.repayment).toList();
-    final allLoans = customerTransactions.where((t) => t.type == TransactionType.loan).toList();
+    final customerTransactions = await _transactionsDao
+        .getTransactionsForCustomer(customerId);
+    final allRepayments = customerTransactions
+        .where((t) => t.type == TransactionType.repayment)
+        .toList();
+    final allLoans = customerTransactions
+        .where((t) => t.type == TransactionType.loan)
+        .toList();
     final Map<String, double> repaymentsByLoanId = {};
 
     for (final repayment in allRepayments) {
       final noteParts = repayment.note.split(':');
       if (noteParts.length == 2) {
         final loanId = noteParts[1].trim();
-        repaymentsByLoanId[loanId] = (repaymentsByLoanId[loanId] ?? 0) + repayment.amount;
+        repaymentsByLoanId[loanId] =
+            (repaymentsByLoanId[loanId] ?? 0) + repayment.amount;
       }
     }
 
@@ -786,7 +819,7 @@ class AppState extends ChangeNotifier {
     return transactions
         .where(
           (t) => t.type == TransactionType.loan && t.date.startsWith(todayDate),
-    )
+        )
         .fold(0.0, (sum, t) => sum + t.amount);
   }
 

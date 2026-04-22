@@ -358,7 +358,9 @@ import 'package:lend_ledger/models/transactionRecord.dart';
 import 'package:provider/provider.dart';
 
 import '../state/app_state.dart';
+import '../utils/amount_formatter.dart';
 import 'add_transaction_page.dart';
+import 'backlog_entry_page.dart';
 
 class CustomerLedgerPage extends StatefulWidget {
   final Customer customer;
@@ -375,9 +377,9 @@ class _CustomerLedgerPageState extends State<CustomerLedgerPage> {
   @override
   void initState() {
     super.initState();
-    _customerFuture = context
-        .read<AppState>()
-        .fetchCustomerDetailsFromApi(widget.customer.id);
+    _customerFuture = context.read<AppState>().fetchCustomerDetailsFromApi(
+      widget.customer.id,
+    );
   }
 
   @override
@@ -422,7 +424,10 @@ class _CustomerLedgerPageState extends State<CustomerLedgerPage> {
 
           final customer = snapshot.data!;
           final items = _buildLedgerItems(customer);
-          final borrowed = items.fold(0.0, (sum, item) => sum + item.principalAmount);
+          final borrowed = items.fold(
+            0.0,
+            (sum, item) => sum + item.principalAmount,
+          );
           final repaid = items
               .where((item) => item.status.toLowerCase() == 'inactive')
               .fold(0.0, (sum, item) => sum + item.totalRepayableAmount);
@@ -467,10 +472,14 @@ class _CustomerLedgerPageState extends State<CustomerLedgerPage> {
                             ),
                             _summaryCard(
                               icon: Icons.account_balance_wallet,
-                              iconColor: balance > 0 ? Colors.red : Colors.green,
+                              iconColor: balance > 0
+                                  ? Colors.red
+                                  : Colors.green,
                               label: "Balance",
                               amount: balance,
-                              amountColor: balance > 0 ? Colors.red : Colors.green,
+                              amountColor: balance > 0
+                                  ? Colors.red
+                                  : Colors.green,
                             ),
                           ],
                         ),
@@ -500,14 +509,8 @@ class _CustomerLedgerPageState extends State<CustomerLedgerPage> {
                       ],
                     ),
                   ),
-                  if (items.isEmpty)
-                    const SizedBox(
-                      height: 20,
-                    ),
-                  if (items.isNotEmpty)
-                    const SizedBox(
-                      height: 10,
-                    ),
+                  if (items.isEmpty) const SizedBox(height: 20),
+                  if (items.isNotEmpty) const SizedBox(height: 10),
                 ],
               ),
             ),
@@ -592,6 +595,25 @@ class _CustomerLedgerPageState extends State<CustomerLedgerPage> {
               });
             },
           ),
+          SpeedDialChild(
+            child: const Icon(Icons.history),
+            label: "Back Log",
+            backgroundColor: Colors.purple,
+            onTap: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => BacklogEntryPage(customer: widget.customer),
+                ),
+              );
+              if (!mounted) return;
+              setState(() {
+                _customerFuture = context
+                    .read<AppState>()
+                    .fetchCustomerDetailsFromApi(widget.customer.id);
+              });
+            },
+          ),
         ],
       ),
     );
@@ -610,7 +632,11 @@ class _CustomerLedgerPageState extends State<CustomerLedgerPage> {
           bottomRight: Radius.circular(22),
         ),
         boxShadow: const [
-          BoxShadow(color: Colors.black26, blurRadius: 10, offset: Offset(0, 4)),
+          BoxShadow(
+            color: Colors.black26,
+            blurRadius: 10,
+            offset: Offset(0, 4),
+          ),
         ],
       ),
       child: Row(
@@ -623,7 +649,8 @@ class _CustomerLedgerPageState extends State<CustomerLedgerPage> {
                   ? Image.memory(
                       profileBytes,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => _headerInitialAvatar(customer),
+                      errorBuilder: (_, __, ___) =>
+                          _headerInitialAvatar(customer),
                     )
                   : _headerInitialAvatar(customer),
             ),
@@ -710,7 +737,7 @@ class _CustomerLedgerPageState extends State<CustomerLedgerPage> {
           Text(label),
           const SizedBox(height: 4),
           Text(
-            "GHS ${amount.toStringAsFixed(2)}",
+            AmountFormatter.compactCurrency(amount),
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.bold,
@@ -725,7 +752,9 @@ class _CustomerLedgerPageState extends State<CustomerLedgerPage> {
   Widget _transactionCard(_LedgerItem t) {
     final isLoan = t.loanType == 'Daily Loan' || t.loanType == 'Soft Loan';
     final isInactive = t.status.toLowerCase() == 'inactive';
-    final color = isInactive ? Colors.grey : (isLoan ? Colors.red : Colors.green);
+    final color = isInactive
+        ? Colors.grey
+        : (isLoan ? Colors.red : Colors.green);
     final icon = isLoan ? Icons.arrow_downward : Icons.arrow_upward;
 
     final title = "Loan - ${t.loanType}";
@@ -737,7 +766,7 @@ class _CustomerLedgerPageState extends State<CustomerLedgerPage> {
         color: isInactive ? Colors.grey.shade100 : Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: const [
-          BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 2))
+          BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 2)),
         ],
       ),
       child: Column(
@@ -760,7 +789,7 @@ class _CustomerLedgerPageState extends State<CustomerLedgerPage> {
                 ),
               ),
               Text(
-                "GHS ${t.totalRepayableAmount.toStringAsFixed(2)}",
+                AmountFormatter.compactCurrency(t.totalRepayableAmount),
                 style: TextStyle(
                   color: color,
                   fontSize: 17,
@@ -771,7 +800,7 @@ class _CustomerLedgerPageState extends State<CustomerLedgerPage> {
           ),
           const SizedBox(height: 10),
           Text(
-            "Principal: GHS ${t.principalAmount.toStringAsFixed(2)} | Interest: GHS ${t.interestAmount.toStringAsFixed(2)}",
+            "Principal: ${AmountFormatter.compactCurrency(t.principalAmount)} | Interest: ${AmountFormatter.compactCurrency(t.interestAmount)}",
             style: const TextStyle(fontSize: 13, color: Colors.black54),
           ),
           Text(
@@ -832,9 +861,11 @@ class _CustomerLedgerPageState extends State<CustomerLedgerPage> {
     return items;
   }
 
-  double _num(dynamic value) => value is num ? value.toDouble() : double.tryParse('$value') ?? 0.0;
+  double _num(dynamic value) =>
+      value is num ? value.toDouble() : double.tryParse('$value') ?? 0.0;
 
-  DateTime _parseDate(dynamic value) => DateTime.tryParse('${value ?? ''}') ?? DateTime.now();
+  DateTime _parseDate(dynamic value) =>
+      DateTime.tryParse('${value ?? ''}') ?? DateTime.now();
 }
 
 class _LedgerItem {
