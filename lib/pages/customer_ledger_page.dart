@@ -351,7 +351,6 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_speed_dial/flutter_speed_dial.dart';
 import 'package:intl/intl.dart';
 import 'package:lend_ledger/models/customer.dart';
 import 'package:lend_ledger/models/transactionRecord.dart';
@@ -384,8 +383,9 @@ class _CustomerLedgerPageState extends State<CustomerLedgerPage> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     return Scaffold(
-      appBar: AppBar(title: Text(widget.customer.name)),
       body: FutureBuilder<Customer>(
         future: _customerFuture,
         builder: (context, snapshot) {
@@ -446,243 +446,267 @@ class _CustomerLedgerPageState extends State<CustomerLedgerPage> {
             },
             child: SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
-              padding: EdgeInsets.zero,
+              padding: const EdgeInsets.fromLTRB(16, 22, 16, 22),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildHeader(customer),
-                  Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            _summaryCard(
-                              icon: Icons.arrow_downward,
-                              iconColor: Colors.blue,
-                              label: "Borrowed",
-                              amount: borrowed,
-                            ),
-                            _summaryCard(
-                              icon: Icons.arrow_upward,
-                              iconColor: Colors.green,
-                              label: "Repaid",
-                              amount: repaid,
-                            ),
-                            _summaryCard(
-                              icon: Icons.account_balance_wallet,
-                              iconColor: balance > 0
-                                  ? Colors.red
-                                  : Colors.green,
-                              label: "Balance",
-                              amount: balance,
-                              amountColor: balance > 0
-                                  ? Colors.red
-                                  : Colors.green,
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 26),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text(
-                              "Transaction History",
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            Text("${items.length} transactions"),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        if (items.isEmpty)
-                          const Center(
-                            child: Padding(
-                              padding: EdgeInsets.only(top: 30),
-                              child: Text("No transactions yet"),
-                            ),
-                          ),
-                        for (final item in items) _transactionCard(item),
-                      ],
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: Icon(
+                      Icons.arrow_back,
+                      color: colorScheme.primary,
+                      size: 18,
+                    ),
+                    style: IconButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      fixedSize: const Size(30, 30),
+                      minimumSize: const Size(30, 30),
+                      padding: EdgeInsets.zero,
                     ),
                   ),
-                  if (items.isEmpty) const SizedBox(height: 20),
-                  if (items.isNotEmpty) const SizedBox(height: 10),
+                  const SizedBox(height: 8),
+                  _buildHeader(customer, colorScheme),
+                  const SizedBox(height: 16),
+                  Text(
+                    "ACCOUNT OVERVIEW",
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: Colors.black54,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _summaryCard(
+                          icon: Icons.south,
+                          iconColor: colorScheme.primary,
+                          label: "Total Borrowed",
+                          amount: borrowed,
+                          accent: colorScheme.primary,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _summaryCard(
+                          icon: Icons.north,
+                          iconColor: Colors.green,
+                          label: "Total Repaid",
+                          amount: repaid,
+                          accent: Colors.green,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _summaryCard(
+                          icon: Icons.account_balance_wallet_outlined,
+                          iconColor: colorScheme.tertiary,
+                          label: "Current Balance",
+                          amount: balance,
+                          amountColor: colorScheme.primary,
+                          accent: colorScheme.tertiary,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 22),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        "TRANSACTION HISTORY",
+                        style: theme.textTheme.labelLarge?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: Colors.black54,
+                        ),
+                      ),
+                      InkWell(
+                        onTap: items.isEmpty
+                            ? null
+                            : () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => _AllLedgerTransactionsPage(
+                                      customerName: customer.name,
+                                      items: items,
+                                    ),
+                                  ),
+                                );
+                              },
+                        borderRadius: BorderRadius.circular(6),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 4,
+                            vertical: 2,
+                          ),
+                          child: Text(
+                            itemsCountLabel,
+                            style: TextStyle(
+                              color: colorScheme.primary,
+                              decoration: TextDecoration.underline,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  if (items.isEmpty)
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Center(
+                          child: Text(
+                            "No transactions yet",
+                            style: theme.textTheme.bodyMedium,
+                          ),
+                        ),
+                      ),
+                    )
+                  else
+                    ...items.take(1).map(_transactionCard),
+                  const SizedBox(height: 20),
+                  Text(
+                    "LOAN OPTIONS",
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: Colors.black54,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  _loanOptionTile(
+                    icon: Icons.calendar_today,
+                    color: colorScheme.primary,
+                    title: "Daily Loan",
+                    subtitle: "Short term loans for daily needs",
+                    onTap: () => _openTransactionPage(
+                      AddTransactionPage(
+                        customer: widget.customer,
+                        preselectedType: TransactionType.loan,
+                        preselectedLoanKind: "Daily Loan",
+                      ),
+                    ),
+                  ),
+                  _loanOptionTile(
+                    icon: Icons.arrow_upward,
+                    color: Colors.green,
+                    title: "Repayment",
+                    subtitle: "Make a repayment towards loan",
+                    onTap: () => _openTransactionPage(
+                      AddTransactionPage(
+                        customer: widget.customer,
+                        preselectedType: TransactionType.repayment,
+                      ),
+                    ),
+                  ),
+                  _loanOptionTile(
+                    icon: Icons.account_balance,
+                    color: colorScheme.tertiary,
+                    title: "Soft Loan",
+                    subtitle: "Medium term loan for investment",
+                    onTap: () => _openTransactionPage(
+                      AddTransactionPage(
+                        customer: widget.customer,
+                        preselectedType: TransactionType.loan,
+                        preselectedLoanKind: "Soft Loan",
+                      ),
+                    ),
+                  ),
+                  _loanOptionTile(
+                    icon: Icons.history,
+                    color: Colors.deepPurple,
+                    title: "Back Log",
+                    subtitle: "View loan repayment schedule",
+                    onTap: () => _openTransactionPage(
+                      BacklogEntryPage(customer: widget.customer),
+                    ),
+                  ),
                 ],
               ),
             ),
           );
         },
       ),
-      floatingActionButton: SpeedDial(
-        icon: Icons.add,
-        activeIcon: Icons.close,
-        backgroundColor: Colors.blue,
-        foregroundColor: Colors.white,
-        overlayOpacity: 0.3,
-        spacing: 12,
-        spaceBetweenChildren: 12,
-        animationDuration: const Duration(milliseconds: 300),
-        children: [
-          SpeedDialChild(
-            child: const Icon(Icons.calendar_today),
-            label: "Daily Loan",
-            backgroundColor: Colors.redAccent,
-            onTap: () async {
-              await Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => AddTransactionPage(
-                    customer: widget.customer,
-                    preselectedType: TransactionType.loan,
-                    preselectedLoanKind: "Daily Loan",
-                  ),
-                ),
-              );
-              if (!mounted) return;
-              setState(() {
-                _customerFuture = context
-                    .read<AppState>()
-                    .fetchCustomerDetailsFromApi(widget.customer.id);
-              });
-            },
-          ),
-          SpeedDialChild(
-            child: const Icon(Icons.handshake),
-            label: "Soft Loan",
-            backgroundColor: Colors.orange,
-            onTap: () async {
-              await Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => AddTransactionPage(
-                    customer: widget.customer,
-                    preselectedType: TransactionType.loan,
-                    preselectedLoanKind: "Soft Loan",
-                  ),
-                ),
-              );
-              if (!mounted) return;
-              setState(() {
-                _customerFuture = context
-                    .read<AppState>()
-                    .fetchCustomerDetailsFromApi(widget.customer.id);
-              });
-            },
-          ),
-          SpeedDialChild(
-            child: const Icon(Icons.arrow_upward),
-            label: "Repayment",
-            backgroundColor: Colors.green,
-            onTap: () async {
-              await Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => AddTransactionPage(
-                    customer: widget.customer,
-                    preselectedType: TransactionType.repayment,
-                  ),
-                ),
-              );
-              if (!mounted) return;
-              setState(() {
-                _customerFuture = context
-                    .read<AppState>()
-                    .fetchCustomerDetailsFromApi(widget.customer.id);
-              });
-            },
-          ),
-          SpeedDialChild(
-            child: const Icon(Icons.history),
-            label: "Back Log",
-            backgroundColor: Colors.purple,
-            onTap: () async {
-              await Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => BacklogEntryPage(customer: widget.customer),
-                ),
-              );
-              if (!mounted) return;
-              setState(() {
-                _customerFuture = context
-                    .read<AppState>()
-                    .fetchCustomerDetailsFromApi(widget.customer.id);
-              });
-            },
-          ),
-        ],
-      ),
     );
   }
 
-  Widget _buildHeader(Customer customer) {
+  String get itemsCountLabel => _lastItemsCount == 1
+      ? '1 Transaction'
+      : '$_lastItemsCount Transactions';
+
+  int _lastItemsCount = 0;
+
+  Future<void> _openTransactionPage(Widget page) async {
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => page));
+    if (!mounted) return;
+    setState(() {
+      _customerFuture = context
+          .read<AppState>()
+          .fetchCustomerDetailsFromApi(widget.customer.id);
+    });
+  }
+
+  Widget _buildHeader(Customer customer, ColorScheme colorScheme) {
     final profileBytes = _safeBase64(customer.profilePicture);
     final hasImage = profileBytes != null;
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+      padding: const EdgeInsets.fromLTRB(16, 14, 20, 18),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: const BorderRadius.only(
-          bottomLeft: Radius.circular(22),
-          bottomRight: Radius.circular(22),
-        ),
-        boxShadow: const [
-          BoxShadow(
-            color: Colors.black26,
-            blurRadius: 10,
-            offset: Offset(0, 4),
-          ),
-        ],
+        color: colorScheme.primary.withValues(alpha: 0.95),
+        borderRadius: BorderRadius.circular(14),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ClipOval(
-            child: SizedBox(
-              width: 78,
-              height: 78,
-              child: hasImage
-                  ? Image.memory(
-                      profileBytes,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) =>
-                          _headerInitialAvatar(customer),
-                    )
-                  : _headerInitialAvatar(customer),
-            ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  customer.name,
-                  style: const TextStyle(
-                    fontSize: 21,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87,
-                  ),
+          Row(
+            children: [
+              ClipOval(
+                child: SizedBox(
+                  width: 92,
+                  height: 92,
+                  child: hasImage
+                      ? Image.memory(
+                          profileBytes,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) =>
+                              _headerInitialAvatar(customer),
+                        )
+                      : _headerInitialAvatar(customer),
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  "📞 ${customer.phone}",
-                  style: const TextStyle(color: Colors.black87, fontSize: 14),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      customer.name,
+                      style: const TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      "📞 ${customer.phone}",
+                      style: const TextStyle(color: Colors.white, fontSize: 15),
+                    ),
+                    Text(
+                      "💳 ${customer.ghanaCardNumber.isEmpty ? 'Ghana card not set' : customer.ghanaCardNumber}",
+                      style: const TextStyle(color: Colors.white, fontSize: 15),
+                    ),
+                    Text(
+                      "🪪 ${customer.licenseIdNumber.isEmpty ? 'License not set' : customer.licenseIdNumber}",
+                      style: const TextStyle(color: Colors.white, fontSize: 15),
+                    ),
+                  ],
                 ),
-                Text(
-                  "💳 ${customer.ghanaCardNumber.isEmpty ? 'Ghana card not set' : customer.ghanaCardNumber}",
-                  style: const TextStyle(color: Colors.black87, fontSize: 14),
-                ),
-                Text(
-                  "🪪 ${customer.licenseIdNumber.isEmpty ? 'License not set' : customer.licenseIdNumber}",
-                  style: const TextStyle(color: Colors.black87, fontSize: 14),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ],
       ),
@@ -718,23 +742,27 @@ class _CustomerLedgerPageState extends State<CustomerLedgerPage> {
     required Color iconColor,
     required String label,
     required double amount,
+    required Color accent,
     Color? amountColor,
   }) {
     return Container(
-      width: 110,
-      padding: const EdgeInsets.symmetric(vertical: 16),
+      padding: const EdgeInsets.fromLTRB(10, 14, 10, 12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(12),
         boxShadow: const [
           BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2)),
         ],
       ),
       child: Column(
         children: [
-          Icon(icon, color: iconColor),
+          CircleAvatar(
+            radius: 16,
+            backgroundColor: iconColor.withValues(alpha: 0.16),
+            child: Icon(icon, color: iconColor, size: 18),
+          ),
           const SizedBox(height: 6),
-          Text(label),
+          Text(label, textAlign: TextAlign.center),
           const SizedBox(height: 4),
           Text(
             AmountFormatter.compactCurrency(amount),
@@ -743,8 +771,40 @@ class _CustomerLedgerPageState extends State<CustomerLedgerPage> {
               fontWeight: FontWeight.bold,
               color: amountColor ?? Colors.black,
             ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 10),
+          Container(
+            height: 2,
+            width: double.infinity,
+            color: accent.withValues(alpha: 0.8),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _loanOptionTile({
+    required IconData icon,
+    required Color color,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Card(
+        child: ListTile(
+          onTap: onTap,
+          leading: CircleAvatar(
+            radius: 18,
+            backgroundColor: color.withValues(alpha: 0.14),
+            child: Icon(icon, color: color),
+          ),
+          title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
+          subtitle: Text(subtitle),
+          trailing: const Icon(Icons.chevron_right),
+        ),
       ),
     );
   }
@@ -858,6 +918,7 @@ class _CustomerLedgerPageState extends State<CustomerLedgerPage> {
       );
     }
     items.sort((a, b) => b.loanDate.compareTo(a.loanDate));
+    _lastItemsCount = items.length;
     return items;
   }
 
@@ -888,4 +949,92 @@ class _LedgerItem {
     required this.status,
     required this.note,
   });
+}
+
+class _AllLedgerTransactionsPage extends StatelessWidget {
+  const _AllLedgerTransactionsPage({
+    required this.customerName,
+    required this.items,
+  });
+
+  final String customerName;
+  final List<_LedgerItem> items;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text('$customerName Transactions')),
+      body: items.isEmpty
+          ? const Center(child: Text('No transactions yet'))
+          : ListView.builder(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 20),
+              itemCount: items.length,
+              itemBuilder: (context, index) {
+                final t = items[index];
+                final isLoan =
+                    t.loanType == 'Daily Loan' || t.loanType == 'Soft Loan';
+                final isInactive = t.status.toLowerCase() == 'inactive';
+                final color = isInactive
+                    ? Colors.grey
+                    : (isLoan ? Colors.red : Colors.green);
+                final icon = isLoan ? Icons.arrow_downward : Icons.arrow_upward;
+
+                return Container(
+                  padding: const EdgeInsets.all(16),
+                  margin: const EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(
+                    color: isInactive ? Colors.grey.shade100 : Colors.white,
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Colors.black12,
+                        blurRadius: 6,
+                        offset: Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          CircleAvatar(
+                            backgroundColor: color.withValues(alpha: 0.1),
+                            child: Icon(icon, color: color),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'Loan - ${t.loanType}',
+                              style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          Text(
+                            AmountFormatter.compactCurrency(t.totalRepayableAmount),
+                            style: TextStyle(
+                              color: color,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        "Principal: ${AmountFormatter.compactCurrency(t.principalAmount)} | Interest: ${AmountFormatter.compactCurrency(t.interestAmount)}",
+                        style: const TextStyle(fontSize: 12, color: Colors.black54),
+                      ),
+                      Text(
+                        DateFormat('dd MMM, yyyy - hh:mm a').format(t.loanDate),
+                        style: const TextStyle(fontSize: 12, color: Colors.black54),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+    );
+  }
 }
