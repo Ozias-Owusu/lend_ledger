@@ -61,7 +61,6 @@
 //   }
 // }
 
-import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -70,6 +69,7 @@ import 'package:lend_ledger/models/customer.dart';
 import 'package:provider/provider.dart';
 import '../state/app_state.dart';
 import '../utils/amount_formatter.dart';
+import '../utils/image_data_utils.dart';
 import 'add_customer_page.dart';
 import 'customer_ledger_page.dart';
 
@@ -399,11 +399,6 @@ class _CustomersPageState extends State<CustomersPage> {
   }
 
   Uint8List? _profileBytes(String? profileBase64) {
-    if (profileBase64 == null || profileBase64.trim().isEmpty) return null;
-    try {
-      return base64Decode(profileBase64);
-    } catch (_) {
-      return null;
-    }
+    return ImageDataUtils.decodeToBytes(profileBase64);
   }
 }

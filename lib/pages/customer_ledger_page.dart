@@ -347,7 +347,6 @@
 // }
 //
 
-import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -358,6 +357,7 @@ import 'package:provider/provider.dart';
 
 import '../state/app_state.dart';
 import '../utils/amount_formatter.dart';
+import '../utils/image_data_utils.dart';
 import 'add_transaction_page.dart';
 import 'backlog_entry_page.dart';
 
@@ -651,62 +651,401 @@ class _CustomerLedgerPageState extends State<CustomerLedgerPage> {
   Widget _buildHeader(Customer customer, ColorScheme colorScheme) {
     final profileBytes = _safeBase64(customer.profilePicture);
     final hasImage = profileBytes != null;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(16, 14, 20, 18),
-      decoration: BoxDecoration(
-        color: colorScheme.primary.withValues(alpha: 0.95),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _showCustomerDetailsBottomSheet(customer),
         borderRadius: BorderRadius.circular(14),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.fromLTRB(16, 14, 20, 18),
+          decoration: BoxDecoration(
+            color: colorScheme.primary.withValues(alpha: 0.95),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              ClipOval(
-                child: SizedBox(
-                  width: 92,
-                  height: 92,
-                  child: hasImage
-                      ? Image.memory(
-                          profileBytes,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) =>
-                              _headerInitialAvatar(customer),
-                        )
-                      : _headerInitialAvatar(customer),
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      customer.name,
-                      style: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
+              Row(
+                children: [
+                  ClipOval(
+                    child: SizedBox(
+                      width: 92,
+                      height: 92,
+                      child: hasImage
+                          ? Image.memory(
+                              profileBytes,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) =>
+                                  _headerInitialAvatar(customer),
+                            )
+                          : _headerInitialAvatar(customer),
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      "📞 ${customer.phone}",
-                      style: const TextStyle(color: Colors.white, fontSize: 15),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          customer.name,
+                          style: const TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          "📞 ${customer.phone}",
+                          style: const TextStyle(color: Colors.white, fontSize: 15),
+                        ),
+                        Text(
+                          "💳 ${customer.ghanaCardNumber.isEmpty ? 'Ghana card not set' : customer.ghanaCardNumber}",
+                          style: const TextStyle(color: Colors.white, fontSize: 15),
+                        ),
+                        Text(
+                          "🪪 ${customer.licenseIdNumber.isEmpty ? 'License not set' : customer.licenseIdNumber}",
+                          style: const TextStyle(color: Colors.white, fontSize: 15),
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          "Tap for full customer details",
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 12,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ],
                     ),
-                    Text(
-                      "💳 ${customer.ghanaCardNumber.isEmpty ? 'Ghana card not set' : customer.ghanaCardNumber}",
-                      style: const TextStyle(color: Colors.white, fontSize: 15),
-                    ),
-                    Text(
-                      "🪪 ${customer.licenseIdNumber.isEmpty ? 'License not set' : customer.licenseIdNumber}",
-                      style: const TextStyle(color: Colors.white, fontSize: 15),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showCustomerDetailsBottomSheet(Customer customer) {
+    final joinedDate = DateTime.tryParse(customer.dateJoined);
+    final joinedLabel = joinedDate != null
+        ? DateFormat('dd MMM, yyyy').format(joinedDate)
+        : customer.dateJoined;
+    final colorScheme = Theme.of(context).colorScheme;
+    final profileBytes = _safeBase64(customer.profilePicture);
+    final hasImage = profileBytes != null;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) {
+        return Container(
+          margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 18),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: SafeArea(
+            top: false,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 42,
+                      height: 5,
+                      margin: const EdgeInsets.only(bottom: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 18,
+                        backgroundColor: colorScheme.secondary.withValues(alpha: 0.16),
+                        child: Icon(
+                          Icons.badge_outlined,
+                          color: colorScheme.primary,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          "Customer Details",
+                          style: TextStyle(
+                            fontSize: 26,
+                            fontWeight: FontWeight.w700,
+                            color: colorScheme.primary,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.pop(context),
+                        icon: const Icon(Icons.close),
+                        style: IconButton.styleFrom(
+                          backgroundColor: colorScheme.secondary.withValues(alpha: 0.15),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFFAF9),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: colorScheme.secondary.withValues(alpha: 0.20)),
+                    ),
+                    child: Row(
+                      children: [
+                        ClipOval(
+                          child: SizedBox(
+                            width: 82,
+                            height: 82,
+                            child: hasImage
+                                ? Image.memory(
+                                    profileBytes,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) =>
+                                        _sheetInitialAvatar(customer, colorScheme),
+                                  )
+                                : _sheetInitialAvatar(customer, colorScheme),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                customer.name,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 24,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              _sheetMiniDetail(Icons.phone_outlined, customer.phone),
+                              _sheetMiniDetail(
+                                Icons.credit_card_outlined,
+                                customer.ghanaCardNumber.isEmpty
+                                    ? "Ghana card not set"
+                                    : customer.ghanaCardNumber,
+                              ),
+                              _sheetMiniDetail(
+                                Icons.badge_outlined,
+                                customer.licenseIdNumber.isEmpty
+                                    ? "License not set"
+                                    : customer.licenseIdNumber,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  _sectionDividerTitle("Personal Information", colorScheme.primary),
+                  const SizedBox(height: 8),
+                  _sheetInfoRow(Icons.person_outline, "Full Name", customer.name),
+                  _sheetInfoRow(Icons.phone_outlined, "Phone", customer.phone),
+                  _sheetInfoRow(
+                    Icons.credit_card_outlined,
+                    "Ghana Card Number",
+                    customer.ghanaCardNumber.isEmpty
+                        ? "Not set"
+                        : customer.ghanaCardNumber,
+                  ),
+                  _sheetInfoRow(
+                    Icons.badge_outlined,
+                    "License Number",
+                    customer.licenseIdNumber.isEmpty
+                        ? "Not set"
+                        : customer.licenseIdNumber,
+                  ),
+                  _sheetInfoRow(Icons.event_outlined, "Date Joined", joinedLabel),
+                  const SizedBox(height: 14),
+                  _sectionDividerTitle("Loan Summary", colorScheme.primary),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _loanSummaryBox(
+                          title: "Daily Loans",
+                          value: "${customer.dailyLoans.length}",
+                          icon: Icons.history,
+                          bg: const Color(0xFFF4F0FF),
+                          fg: const Color(0xFF5A49CA),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _loanSummaryBox(
+                          title: "Soft Loans",
+                          value: "${customer.softLoans.length}",
+                          icon: Icons.account_balance,
+                          bg: const Color(0xFFEFFAF2),
+                          fg: const Color(0xFF1FA35B),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _sheetInitialAvatar(Customer customer, ColorScheme colorScheme) {
+    return Container(
+      color: colorScheme.primary.withValues(alpha: 0.55),
+      alignment: Alignment.center,
+      child: Text(
+        customer.firstInitial,
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.w700,
+          fontSize: 32,
+        ),
+      ),
+    );
+  }
+
+  Widget _sheetMiniDetail(IconData icon, String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        children: [
+          Icon(icon, size: 14, color: Colors.black54),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(fontSize: 11, color: Colors.black87),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _sectionDividerTitle(String title, Color color) {
+    return Row(
+      children: [
+        const Expanded(child: Divider()),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Text(
+            title,
+            style: TextStyle(
+              color: color.withValues(alpha: 0.8),
+              fontWeight: FontWeight.w700,
+              fontSize: 15,
+            ),
+          ),
+        ),
+        const Expanded(child: Divider()),
+      ],
+    );
+  }
+
+  Widget _sheetInfoRow(IconData icon, String label, String value) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFEDEDED)),
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 14,
+            backgroundColor: const Color(0xFFF7ECEC),
+            child: Icon(icon, size: 15, color: const Color(0xFFD39A9A)),
+          ),
+          const SizedBox(width: 10),
+          SizedBox(
+            width: 132,
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+                color: Colors.black54,
+                fontSize: 13,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _loanSummaryBox({
+    required String title,
+    required String value,
+    required IconData icon,
+    required Color bg,
+    required Color fg,
+  }) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: fg.withValues(alpha: 0.15)),
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 15,
+            backgroundColor: Colors.white.withValues(alpha: 0.85),
+            child: Icon(icon, color: fg, size: 16),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
+                ),
+                Text(
+                  value,
+                  style: TextStyle(
+                    color: fg,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 18,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -729,12 +1068,7 @@ class _CustomerLedgerPageState extends State<CustomerLedgerPage> {
   }
 
   Uint8List? _safeBase64(String? input) {
-    if (input == null || input.trim().isEmpty) return null;
-    try {
-      return base64Decode(input);
-    } catch (_) {
-      return null;
-    }
+    return ImageDataUtils.decodeToBytes(input);
   }
 
   Widget _summaryCard({

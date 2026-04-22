@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -8,6 +7,7 @@ import 'package:intl_phone_field/intl_phone_field.dart';
 import 'package:lend_ledger/models/customer.dart';
 import 'package:provider/provider.dart';
 import '../state/app_state.dart';
+import '../utils/image_data_utils.dart';
 
 class AddCustomerPage extends StatefulWidget {
   final Customer? customerToEdit;
@@ -696,13 +696,7 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
   }
 
   Uint8List? _profileBytesOrNull() {
-    final value = _profilePicturePath;
-    if (value == null || value.isEmpty) return null;
-    try {
-      return Uint8List.fromList(base64Decode(value));
-    } catch (_) {
-      return null;
-    }
+    return ImageDataUtils.decodeToBytes(_profilePicturePath);
   }
 
   String _initialFromName() {
@@ -747,10 +741,11 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
   // }
 
   Widget _buildImagePreview({String? imagePath, required String label}) {
-    final valid =
-        imagePath != null &&
-        imagePath.isNotEmpty &&
-        File(imagePath).existsSync();
+    final hasPath = imagePath != null && imagePath.isNotEmpty;
+    final safePath = imagePath ?? '';
+    final file = hasPath ? File(safePath) : null;
+    final fileExists = file != null && file.existsSync();
+    final memoryBytes = hasPath ? ImageDataUtils.decodeToBytes(imagePath) : null;
 
     return Column(
       children: [
@@ -765,15 +760,17 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
               color: Colors.grey.shade100,
             ),
             clipBehavior: Clip.antiAlias,
-            child: valid
-                ? Image.file(File(imagePath), fit: BoxFit.cover)
-                : const Center(
-                    child: Icon(
-                      Icons.image_not_supported_outlined,
-                      color: Colors.grey,
-                      size: 40,
-                    ),
-                  ),
+            child: fileExists
+                ? Image.file(file, fit: BoxFit.cover)
+                : (memoryBytes != null
+                    ? Image.memory(memoryBytes, fit: BoxFit.cover)
+                    : const Center(
+                        child: Icon(
+                          Icons.image_not_supported_outlined,
+                          color: Colors.grey,
+                          size: 40,
+                        ),
+                      )),
           ),
         ),
       ],
