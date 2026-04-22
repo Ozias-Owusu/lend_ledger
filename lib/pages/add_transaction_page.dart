@@ -462,7 +462,7 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
     return Scaffold(
       appBar: AppBar(
         title: Text(title),
-        backgroundColor: isSoftLoan
+        backgroundColor: (isSoftLoan || (!isRepayment && !isSoftLoan))
             ? const Color(0xFFD7A9A4)
             : Theme.of(context).appBarTheme.backgroundColor,
       ),
@@ -586,113 +586,10 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
               ),
             ],
             if (!isRepayment && !isSoftLoan) ...[
-              const Text(
-                "Loan Amount",
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: _amountCtl,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  hintText: "Enter loan amount",
-                  border: OutlineInputBorder(),
-                  prefixText: 'GHS ',
-                ),
-                onChanged: (_) => setState(() {}),
-              ),
-              const SizedBox(height: 30),
-              Text(
-                "Interest Rate: ${_interestPercent.toStringAsFixed(1)}% per ${_durationUnit.name.substring(0, _durationUnit.name.length - 1)}",
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              Slider(
-                value: _interestPercent,
-                min: 0,
-                max: 20.0,
-                divisions: 200,
-                label: "${_interestPercent.toStringAsFixed(1)}%",
-                onChanged: (value) => setState(() => _interestPercent = value),
-              ),
-              const SizedBox(height: 20),
-              if (isSoftLoan) ...[
-                const Text(
-                  "Loan Duration",
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      flex: 2,
-                      child: TextFormField(
-                        controller: _durationCtl,
-                        keyboardType: TextInputType.number,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly,
-                        ],
-                        decoration: const InputDecoration(
-                          border: OutlineInputBorder(),
-                        ),
-                        onChanged: (_) => setState(() {}),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      flex: 3,
-                      child: DropdownButtonFormField<DurationUnit>(
-                        initialValue: _durationUnit,
-                        items: const [
-                          DropdownMenuItem(
-                            value: DurationUnit.days,
-                            child: Text('Days'),
-                          ),
-                          DropdownMenuItem(
-                            value: DurationUnit.weeks,
-                            child: Text('Weeks'),
-                          ),
-                          DropdownMenuItem(
-                            value: DurationUnit.months,
-                            child: Text('Months'),
-                          ),
-                        ],
-                        onChanged: (value) =>
-                            setState(() => _durationUnit = value!),
-                        decoration: const InputDecoration(
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 30),
-              ],
-              Card(
-                elevation: 2,
-                color: Colors.indigo.shade50,
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    children: [
-                      _summaryRow(
-                        "Total Repayable:",
-                        AmountFormatter.compactCurrency(totalRepayable),
-                      ),
-                      if (isSoftLoan) ...[
-                        const Divider(height: 20),
-                        _summaryRow(
-                          installmentLabel,
-                          AmountFormatter.compactCurrency(installmentAmount),
-                        ),
-                        const Divider(height: 20),
-                        _summaryRow("Loan End Date:", loanEndDate),
-                      ],
-                    ],
-                  ),
-                ),
+              ..._buildDailyLoanUi(
+                context: context,
+                totalRepayable: totalRepayable,
+                totalInterest: totalInterest,
               ),
             ],
             if (widget.enableCustomDateTime) ...[
@@ -702,61 +599,23 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
           ],
         ),
       ),
-      floatingActionButton: isSoftLoan
-          ? null
-          : FloatingActionButton.extended(
-              onPressed:
-                  (_customerLoans.isEmpty && isRepayment) || _isSavingTransaction
-                  ? null
-                  : _saveTransaction,
-              icon: _isSavingTransaction
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.2,
-                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                      ),
-                    )
-                  : const Icon(Icons.save),
-              label: Text(_isSavingTransaction ? "Saving..." : "Save Transaction"),
-            ),
-      bottomNavigationBar: isSoftLoan
-          ? Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 18),
-              child: SafeArea(
-                top: false,
-                child: SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: _isSavingTransaction ? null : _saveTransaction,
-                    icon: _isSavingTransaction
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.save_outlined),
-                    label: Text(
-                      _isSavingTransaction ? "Saving..." : "Save Transaction",
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      minimumSize: const Size.fromHeight(54),
-                      backgroundColor: const Color(0xFFD7A9A4),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(28),
-                      ),
-                      textStyle: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed:
+            (_customerLoans.isEmpty && isRepayment) || _isSavingTransaction
+            ? null
+            : _saveTransaction,
+        icon: _isSavingTransaction
+            ? const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                 ),
-              ),
-            )
-          : null,
+              )
+            : const Icon(Icons.save),
+        label: Text(_isSavingTransaction ? "Saving..." : "Save Transaction"),
+      ),
     );
   }
 
@@ -977,6 +836,203 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
             Expanded(
               child: Text(
                 "The amounts above are estimates.\nActual values may vary.",
+                style: TextStyle(fontSize: 12.5, color: Colors.black54),
+              ),
+            ),
+          ],
+        ),
+      ),
+      if (widget.enableCustomDateTime) ...[
+        const SizedBox(height: 16),
+        _buildCustomDateTimePicker(isRepayment: false),
+      ],
+      const SizedBox(height: 8),
+    ];
+  }
+
+  List<Widget> _buildDailyLoanUi({
+    required BuildContext context,
+    required double totalRepayable,
+    required double totalInterest,
+  }) {
+    final surface = const Color(0xFFF9F3F3);
+    final stroke = const Color(0xFFE7DADA);
+    final accent = const Color(0xFFD7A9A4);
+    final valueColor = const Color(0xFF5A2A6A);
+    return [
+      const Text(
+        "Loan Amount",
+        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+      ),
+      const SizedBox(height: 10),
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: stroke),
+        ),
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 18,
+              backgroundColor: surface,
+              child: Icon(Icons.account_balance_wallet_outlined, color: accent),
+            ),
+            const SizedBox(width: 10),
+            const Text("GHS", style: TextStyle(fontWeight: FontWeight.w600)),
+            const SizedBox(width: 12),
+            Expanded(
+              child: TextField(
+                controller: _amountCtl,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  hintText: "Enter loan amount",
+                  border: InputBorder.none,
+                  isDense: true,
+                ),
+                onChanged: (_) => setState(() {}),
+              ),
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 8),
+      const Text(
+        "Enter the amount to be loaned to the customer",
+        style: TextStyle(color: Colors.black54),
+      ),
+      const SizedBox(height: 20),
+      const Text(
+        "Interest Rate",
+        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+      ),
+      const SizedBox(height: 10),
+      Container(
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: stroke),
+        ),
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+              decoration: BoxDecoration(
+                color: accent,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                "${_interestPercent.toStringAsFixed(1)}%",
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            SliderTheme(
+              data: SliderTheme.of(context).copyWith(
+                activeTrackColor: accent,
+                inactiveTrackColor: const Color(0xFFF1DFDF),
+                thumbColor: accent,
+              ),
+              child: Slider(
+                value: _interestPercent,
+                min: 1,
+                max: 20,
+                divisions: 190,
+                onChanged: (value) => setState(() => _interestPercent = value),
+              ),
+            ),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 12),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text("1%"),
+                  Text("per month"),
+                  Text("20%"),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8F3F2),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.info_outline, color: Color(0xFFC59796), size: 18),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      "Interest will be charged on the reducing balance daily.",
+                      style: TextStyle(fontSize: 12.5, color: Colors.black54),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 20),
+      const Text(
+        "Loan Summary",
+        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+      ),
+      const SizedBox(height: 10),
+      Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: stroke),
+        ),
+        child: Column(
+          children: [
+            _softSummaryRow(
+              icon: Icons.receipt_long_outlined,
+              label: "Total Repayable",
+              value: AmountFormatter.compactCurrency(totalRepayable),
+              valueColor: valueColor,
+            ),
+            const Divider(height: 18),
+            _softSummaryRow(
+              icon: Icons.percent,
+              label: "Daily Interest (${_interestPercent.toStringAsFixed(1)}%)",
+              value: AmountFormatter.compactCurrency(totalInterest),
+              valueColor: valueColor,
+            ),
+            const Divider(height: 18),
+            _softSummaryRow(
+              icon: Icons.calendar_month_outlined,
+              label: "Repayment Period",
+              value: "Daily",
+              valueColor: valueColor,
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 14),
+      Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8F3F2),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: stroke),
+        ),
+        child: const Row(
+          children: [
+            Icon(Icons.info_outline, color: Color(0xFFC59796)),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                "The total repayable includes principal and daily interest.",
                 style: TextStyle(fontSize: 12.5, color: Colors.black54),
               ),
             ),
@@ -1241,23 +1297,4 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
     return double.tryParse('$value') ?? 0.0;
   }
 
-  Widget _summaryRow(String label, String value) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(
-          label,
-          style: TextStyle(fontSize: 16, color: Colors.grey.shade700),
-        ),
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: Colors.indigo,
-          ),
-        ),
-      ],
-    );
-  }
 }
