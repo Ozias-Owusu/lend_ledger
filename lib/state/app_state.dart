@@ -378,6 +378,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:lend_ledger/db/soft_loan_dao.dart';
 import 'package:lend_ledger/models/installment.dart';
+import 'package:lend_ledger/models/loan_overview.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:lend_ledger/db/customers_dao.dart';
 import 'package:lend_ledger/db/transaction_dao.dart';
@@ -407,6 +408,8 @@ class AppState extends ChangeNotifier {
   String? customersApiError;
   LoanMetrics? dashboardMetrics;
   String? dashboardMetricsError;
+  LoanOverview? dashboardOverview;
+  String? dashboardOverviewError;
   List<TransactionRecord> transactions = [];
   bool isLoggedIn = false;
   String loggedInEmail = '';
@@ -441,6 +444,17 @@ class AppState extends ChangeNotifier {
     } catch (e) {
       dashboardMetricsError = e.toString();
       dashboardMetrics = null;
+    }
+    notifyListeners();
+  }
+
+  Future<void> loadDashboardOverviewFromApi({int months = 6}) async {
+    dashboardOverviewError = null;
+    try {
+      dashboardOverview = await _loanMetricsApiService.fetchOverview(months: months);
+    } catch (e) {
+      dashboardOverviewError = e.toString();
+      dashboardOverview = null;
     }
     notifyListeners();
   }

@@ -5,6 +5,7 @@ import 'package:lend_ledger/state/app_state.dart';
 import 'package:lend_ledger/theme/theme.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
+import 'package:responsive_framework/responsive_framework.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() async {
@@ -54,6 +55,15 @@ class MyApp extends StatelessWidget {
       child: MaterialApp(
         title: 'Loan Management',
         theme: AppTheme.light(),
+        builder: (context, child) => ResponsiveBreakpoints.builder(
+          child: BouncingScrollWrapper.builder(context, child!),
+          breakpoints: const [
+            Breakpoint(start: 0, end: 349, name: MOBILE),
+            Breakpoint(start: 350, end: 599, name: TABLET),
+            Breakpoint(start: 600, end: 1199, name: DESKTOP),
+            Breakpoint(start: 1200, end: double.infinity, name: '4K'),
+          ],
+        ),
         home: isLoggedIn ? const AppShellPage() : const LandingPage(),
         // home: LandingPage(),
         debugShowCheckedModeBanner: false,
