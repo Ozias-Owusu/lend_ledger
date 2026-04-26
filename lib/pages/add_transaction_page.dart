@@ -842,10 +842,6 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
           ],
         ),
       ),
-      if (widget.enableCustomDateTime) ...[
-        const SizedBox(height: 16),
-        _buildCustomDateTimePicker(isRepayment: false),
-      ],
       const SizedBox(height: 8),
     ];
   }
@@ -1039,10 +1035,6 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
           ],
         ),
       ),
-      if (widget.enableCustomDateTime) ...[
-        const SizedBox(height: 16),
-        _buildCustomDateTimePicker(isRepayment: false),
-      ],
       const SizedBox(height: 8),
     ];
   }
