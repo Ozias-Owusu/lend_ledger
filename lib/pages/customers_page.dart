@@ -64,6 +64,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:excel/excel.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
@@ -494,6 +495,11 @@ class _CustomersPageState extends State<CustomersPage> {
         return;
       }
 
+      final confirmed = await _showFilePreview(path);
+      if (confirmed != true) {
+        return;
+      }
+
       setState(() => _isUploadingImport = true);
       await context.read<AppState>().importCustomersFileToApi(path);
       if (!mounted) return;
@@ -510,5 +516,117 @@ class _CustomersPageState extends State<CustomersPage> {
         setState(() => _isUploadingImport = false);
       }
     }
+  }
+
+  Future<bool?> _showFilePreview(String path) async {
+    final file = File(path);
+    final name = path.split(Platform.pathSeparator).last;
+    final ext = name.split('.').last.toLowerCase();
+
+    Widget content;
+    if (ext == 'xlsx' || ext == 'xls') {
+      try {
+        final bytes = file.readAsBytesSync();
+        final excel = Excel.decodeBytes(bytes);
+        final sheetName = excel.tables.keys.isNotEmpty
+            ? excel.tables.keys.first
+            : null;
+        final sheet = sheetName != null ? excel.tables[sheetName] : null;
+        final rows = sheet?.rows ?? const [];
+
+        final previewRows = rows.take(10).toList();
+        content = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              name,
+              style: const TextStyle(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            if (sheetName != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 4, bottom: 8),
+                child: Text(
+                  'Sheet: $sheetName (showing first ${previewRows.length} rows)',
+                  style: const TextStyle(fontSize: 12, color: Colors.black54),
+                ),
+              ),
+            Flexible(
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minWidth: 280),
+                  child: SingleChildScrollView(
+                    child: Table(
+                      defaultVerticalAlignment:
+                          TableCellVerticalAlignment.middle,
+                      border: TableBorder.all(
+                        color: const Color(0xFFE0E0E0),
+                      ),
+                      children: previewRows.map((row) {
+                        final cells = row
+                            .map((c) => (c?.value ?? '').toString())
+                            .toList();
+                        return TableRow(
+                          children: cells
+                              .map(
+                                (text) => Padding(
+                                  padding: const EdgeInsets.all(4),
+                                  child: Text(
+                                    text,
+                                    style: const TextStyle(fontSize: 11),
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      } catch (_) {
+        content = Text(
+          'File: $name\n\nUnable to preview this Excel file, but you can still upload it.',
+          style: const TextStyle(fontSize: 13),
+        );
+      }
+    } else {
+      final sizeBytes = await file.length();
+      final sizeKb = (sizeBytes / 1024).toStringAsFixed(1);
+      content = Text(
+        'File: $name\nType: $ext\nSize: $sizeKb KB\n\nOnly Excel files can show a row preview. This file will still be uploaded if you continue.',
+        style: const TextStyle(fontSize: 13),
+      );
+    }
+
+    if (!mounted) return false;
+    return showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Preview before upload'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: content,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Upload'),
+            ),
+          ],
+        );
+      },
+    );
   }
 }
