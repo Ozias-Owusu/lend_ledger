@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:io' show Platform;
 import 'package:lend_ledger/pages/app_shell_page.dart';
 import 'package:lend_ledger/pages/landing_page.dart';
 import 'package:lend_ledger/state/app_state.dart';
@@ -27,18 +28,31 @@ void main() async {
 // Function to request necessary permissions
 Future<void> _requestPermissions() async {
   // Request multiple permissions at once.
-  await [
+  // Note: file uploads via `file_picker` typically don't need broad storage
+  // permissions on Android (SAF), but we still request the commonly-used
+  // permissions your app currently uses for media selection/capture.
+  final permissionsToRequest = <Permission>[
     Permission.camera,
     Permission.storage,
-    Permission.photos, // Recommended for iOS
-    Permission.videos, // Recommended for Android 13+
-  ].request();
+    Permission.photos, // iOS / media library
+    Permission.videos, // Android 13+ media access
+  ];
 
-  // You can check the status of each permission and handle it accordingly.
-  // For example, show a dialog if a permission is permanently denied.
-  if (await Permission.camera.isPermanentlyDenied ||
-      await Permission.storage.isPermanentlyDenied) {
-    // The user has permanently denied the permission, open app settings.
+  // Android 11+ "all files" access is rarely needed; we only request if present.
+  if (Platform.isAndroid) {
+    permissionsToRequest.add(Permission.photos);
+    permissionsToRequest.add(Permission.videos);
+  }
+
+  final results = await permissionsToRequest.request();
+
+  // If any permission is permanently denied, guide user to app settings.
+  final permanentlyDenied = results.entries
+      .where((e) => e.value.isPermanentlyDenied)
+      .map((e) => e.key)
+      .toList();
+
+  if (permanentlyDenied.isNotEmpty) {
     openAppSettings();
   }
 }

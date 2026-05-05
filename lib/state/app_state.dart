@@ -494,6 +494,15 @@ class AppState extends ChangeNotifier {
     await loadCustomersFromApi();
   }
 
+  Future<CustomersImportTemplate> downloadCustomersImportTemplate() {
+    return _customersApiService.downloadImportTemplate();
+  }
+
+  Future<void> importCustomersFileToApi(String filePath) async {
+    await _customersApiService.importCustomersFile(filePath);
+    await loadCustomersFromApi();
+  }
+
   Future<void> updateCustomerInApi({
     required String id,
     required String fullName,

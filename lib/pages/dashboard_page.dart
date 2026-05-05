@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import '../models/loan_metrics.dart';
 import '../models/loan_overview.dart';
 import 'loan_insights_page.dart';
+import 'reports_coming_soon_page.dart';
 import '../services/repayments_api_service.dart';
 import '../state/app_state.dart';
 import '../utils/amount_formatter.dart';
@@ -154,6 +155,8 @@ class _DashboardPageState extends State<DashboardPage> {
                                           MaterialPageRoute(
                                             builder: (_) => _AllTransactionsPage(
                                               transactions: _allTransactions,
+                                              metrics: state.dashboardMetrics,
+                                              overview: state.dashboardOverview,
                                             ),
                                           ),
                                         );
@@ -196,6 +199,30 @@ class _DashboardPageState extends State<DashboardPage> {
                                     MaterialPageRoute(
                                       builder: (_) => LoanInsightsPage(
                                         initialOverview: state.dashboardOverview,
+                                        onTransactionsTap: () {
+                                          Navigator.pushReplacement(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (_) => _AllTransactionsPage(
+                                                transactions: _allTransactions,
+                                                metrics: state.dashboardMetrics,
+                                                overview: state.dashboardOverview,
+                                              ),
+                                            ),
+                                          );
+                                        },
+                                        onOverviewTap: () {
+                                          Navigator.pushReplacement(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (_) => _OverviewPage(
+                                                metrics: state.dashboardMetrics,
+                                                overview: state.dashboardOverview,
+                                                transactions: _allTransactions,
+                                              ),
+                                            ),
+                                          );
+                                        },
                                       ),
                                     ),
                                   );
@@ -210,6 +237,14 @@ class _DashboardPageState extends State<DashboardPage> {
                                 subtitle: "Detailed Stats",
                                 iconBg: const Color(0xFFF3ECFB),
                                 iconColor: const Color(0xFF8F6BC6),
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => const ReportsComingSoonPage(),
+                                    ),
+                                  );
+                                },
                               ),
                             ),
                           ],
@@ -241,6 +276,8 @@ class _DashboardPageState extends State<DashboardPage> {
                                     MaterialPageRoute(
                                       builder: (_) => _AllTransactionsPage(
                                         transactions: remainingTransactions,
+                                        metrics: state.dashboardMetrics,
+                                        overview: state.dashboardOverview,
                                       ),
                                     ),
                                   );
@@ -472,14 +509,21 @@ class _DashboardPageState extends State<DashboardPage> {
 }
 
 class _AllTransactionsPage extends StatelessWidget {
-  const _AllTransactionsPage({required this.transactions});
+  const _AllTransactionsPage({
+    required this.transactions,
+    this.metrics,
+    this.overview,
+  });
 
   final List<_DashboardTxn> transactions;
+  final LoanMetrics? metrics;
+  final LoanOverview? overview;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text("All Transactions")),
+      bottomNavigationBar: _transactionsBottomBar(context),
       body: transactions.isEmpty
           ? const Center(child: Text("No transactions available"))
           : ListView.builder(
@@ -520,6 +564,85 @@ class _AllTransactionsPage extends StatelessWidget {
                 );
               },
             ),
+    );
+  }
+
+  Widget _transactionsBottomBar(BuildContext context) {
+    return SafeArea(
+      top: false,
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(14, 0, 14, 8),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8F0F1),
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            const _BottomMiniNavItem(
+              icon: Icons.receipt_long_outlined,
+              label: "Transactions",
+              active: true,
+            ),
+            _BottomMiniNavItem(
+              icon: Icons.pie_chart_outline_rounded,
+              label: "Overview",
+              onTap: () {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => _OverviewPage(
+                      metrics: metrics,
+                      overview: overview,
+                      transactions: transactions,
+                    ),
+                  ),
+                );
+              },
+            ),
+            _BottomMiniNavItem(
+              icon: Icons.show_chart_rounded,
+              label: "Loan Insights",
+              onTap: () {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => LoanInsightsPage(
+                      initialOverview: overview,
+                      onTransactionsTap: () => Navigator.pop(context),
+                      onOverviewTap: () {
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => _OverviewPage(
+                              metrics: metrics,
+                              overview: overview,
+                              transactions: transactions,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                );
+              },
+            ),
+            _BottomMiniNavItem(
+              icon: Icons.bar_chart_rounded,
+              label: "Reports",
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const ReportsComingSoonPage(),
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -1217,7 +1340,22 @@ class _OverviewPageState extends State<_OverviewPage> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
-            _BottomMiniNavItem(icon: Icons.receipt_long_outlined, label: "Transactions"),
+            _BottomMiniNavItem(
+              icon: Icons.receipt_long_outlined,
+              label: "Transactions",
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => _AllTransactionsPage(
+                      transactions: widget.transactions,
+                      metrics: widget.metrics,
+                      overview: _overview,
+                    ),
+                  ),
+                );
+              },
+            ),
             _BottomMiniNavItem(
               icon: Icons.pie_chart_outline_rounded,
               label: "Overview",
@@ -1232,12 +1370,36 @@ class _OverviewPageState extends State<_OverviewPage> {
                   MaterialPageRoute(
                     builder: (_) => LoanInsightsPage(
                       initialOverview: _overview,
+                      onTransactionsTap: () {
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => _AllTransactionsPage(
+                              transactions: widget.transactions,
+                              metrics: widget.metrics,
+                              overview: _overview,
+                            ),
+                          ),
+                        );
+                      },
+                      onOverviewTap: () => Navigator.pop(context),
                     ),
                   ),
                 );
               },
             ),
-            _BottomMiniNavItem(icon: Icons.bar_chart_rounded, label: "Reports"),
+            _BottomMiniNavItem(
+              icon: Icons.bar_chart_rounded,
+              label: "Reports",
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const ReportsComingSoonPage(),
+                  ),
+                );
+              },
+            ),
           ],
         ),
       ),

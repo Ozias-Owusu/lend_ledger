@@ -61,11 +61,15 @@
 //   }
 // }
 
+import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:lend_ledger/models/customer.dart';
+import 'package:open_filex/open_filex.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import '../state/app_state.dart';
 import '../utils/amount_formatter.dart';
@@ -84,6 +88,8 @@ class CustomersPage extends StatefulWidget {
 class _CustomersPageState extends State<CustomersPage> {
   String _query = '';
   late Future<void> _initialLoad;
+  bool _isDownloadingTemplate = false;
+  bool _isUploadingImport = false;
 
   @override
   void initState() {
@@ -125,6 +131,47 @@ class _CustomersPageState extends State<CustomersPage> {
                 ),
               ),
               onChanged: (v) => setState(() => _query = v),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _isDownloadingTemplate || _isUploadingImport
+                        ? null
+                        : _downloadTemplate,
+                    icon: _isDownloadingTemplate
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.download_rounded),
+                    label: const Text('Download Template'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: _isUploadingImport || _isDownloadingTemplate
+                        ? null
+                        : _pickAndUploadFile,
+                    icon: _isUploadingImport
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Icons.upload_file_rounded),
+                    label: const Text('Upload File'),
+                  ),
+                ),
+              ],
             ),
           ),
 
@@ -400,5 +447,68 @@ class _CustomersPageState extends State<CustomersPage> {
 
   Uint8List? _profileBytes(String? profileBase64) {
     return ImageDataUtils.decodeToBytes(profileBase64);
+  }
+
+  Future<void> _downloadTemplate() async {
+    setState(() => _isDownloadingTemplate = true);
+    try {
+      final template = await context
+          .read<AppState>()
+          .downloadCustomersImportTemplate();
+      final dir = await getApplicationDocumentsDirectory();
+      final savePath = '${dir.path}/${template.filename}';
+      final file = File(savePath);
+      await file.writeAsBytes(template.bytes, flush: true);
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Template downloaded: ${template.filename}')),
+      );
+      await OpenFilex.open(savePath);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to download template: $e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isDownloadingTemplate = false);
+      }
+    }
+  }
+
+  Future<void> _pickAndUploadFile() async {
+    try {
+      final result = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: const ['pdf', 'xls', 'xlsx', 'doc', 'docx'],
+      );
+      if (result == null) return;
+
+      final path = result.files.single.path;
+      if (path == null || path.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Invalid file selected.')),
+        );
+        return;
+      }
+
+      setState(() => _isUploadingImport = true);
+      await context.read<AppState>().importCustomersFileToApi(path);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Customers file uploaded successfully.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Upload failed: $e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isUploadingImport = false);
+      }
+    }
   }
 }

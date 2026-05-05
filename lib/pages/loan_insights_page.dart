@@ -4,13 +4,21 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../models/loan_overview.dart';
+import '../pages/reports_coming_soon_page.dart';
 import '../state/app_state.dart';
 import '../utils/amount_formatter.dart';
 
 class LoanInsightsPage extends StatefulWidget {
-  const LoanInsightsPage({super.key, this.initialOverview});
+  const LoanInsightsPage({
+    super.key,
+    this.initialOverview,
+    this.onTransactionsTap,
+    this.onOverviewTap,
+  });
 
   final LoanOverview? initialOverview;
+  final VoidCallback? onTransactionsTap;
+  final VoidCallback? onOverviewTap;
 
   @override
   State<LoanInsightsPage> createState() => _LoanInsightsPageState();
@@ -66,31 +74,39 @@ class _LoanInsightsPageState extends State<LoanInsightsPage> {
     final dailyOutstanding = breakdown?.dailyOutstanding ?? 0.0;
     final softOutstanding = breakdown?.softOutstanding ?? 0.0;
     final totalOutstanding = ov?.stats.totalOutstanding ?? dailyOutstanding + softOutstanding;
-    final dailyPercent = breakdown?.dailyPercent ??
-        (totalOutstanding <= 0 ? 0.0 : dailyOutstanding / totalOutstanding);
-    final softPercent = breakdown?.softPercent ??
-        (totalOutstanding <= 0 ? 0.0 : softOutstanding / totalOutstanding);
+    final apiDailyPercent = breakdown?.dailyPercent;
+    final apiSoftPercent = breakdown?.softPercent;
+    final hasUsableApiPercents = (apiDailyPercent != null && apiDailyPercent > 0) ||
+        (apiSoftPercent != null && apiSoftPercent > 0);
+    final dailyPercent = hasUsableApiPercents
+        ? (apiDailyPercent ?? 0.0)
+        : (totalOutstanding <= 0 ? 0.0 : dailyOutstanding / totalOutstanding);
+    final softPercent = hasUsableApiPercents
+        ? (apiSoftPercent ?? 0.0)
+        : (totalOutstanding <= 0 ? 0.0 : softOutstanding / totalOutstanding);
     final totalBorrowed = ov?.stats.totalBorrowedThisMonth ?? 0.0;
     final totalRepaid = ov?.stats.totalRepaidThisMonth ?? 0.0;
 
-    final dailyBorrowed = totalBorrowed * dailyPercent;
-    final softBorrowed = totalBorrowed * softPercent;
-    final dailyRepaid = totalRepaid * dailyPercent;
-    final softRepaid = totalRepaid * softPercent;
+    final dailyBorrowed = breakdown?.dailyBorrowed ?? (totalBorrowed * dailyPercent);
+    final softBorrowed = breakdown?.softBorrowed ?? (totalBorrowed * softPercent);
+    final dailyRepaid = breakdown?.dailyRepaid ?? (totalRepaid * dailyPercent);
+    final softRepaid = breakdown?.softRepaid ?? (totalRepaid * softPercent);
 
     final status = ov?.statusBreakdown;
     final totalLoans = (status?.onTrackCount ?? 0) + (status?.dueSoonCount ?? 0) + (status?.overdueCount ?? 0);
-    final dailyCount = (totalLoans * dailyPercent).round();
-    final softCount = math.max(0, totalLoans - dailyCount).toInt();
-    final dailyAvg = dailyCount == 0 ? 0.0 : dailyOutstanding / dailyCount;
-    final softAvg = softCount == 0 ? 0.0 : softOutstanding / softCount;
+    final dailyCount = breakdown?.dailyLoanCount ?? (totalLoans * dailyPercent).round();
+    final softCount = breakdown?.softLoanCount ?? math.max(0, totalLoans - dailyCount).toInt();
+    final dailyAvg = breakdown?.dailyAvgLoanAmount ?? (dailyCount == 0 ? 0.0 : dailyOutstanding / dailyCount);
+    final softAvg = breakdown?.softAvgLoanAmount ?? (softCount == 0 ? 0.0 : softOutstanding / softCount);
 
     final trend = ov?.repaymentTrend ?? const <LoanOverviewTrendPoint>[];
+    final trendScale = _trendScale(trend);
     final topCustomers = (ov?.topCustomers ?? const <OverviewTopCustomer>[])
       ..sort((a, b) => b.outstanding.compareTo(a.outstanding));
 
     return Scaffold(
       backgroundColor: const Color(0xFFF7F7F8),
+      bottomNavigationBar: _insightsBottomBar(context),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(14, 8, 14, 12),
@@ -161,25 +177,7 @@ class _LoanInsightsPageState extends State<LoanInsightsPage> {
               child: LinearProgressIndicator(minHeight: 2),
             ),
             const SizedBox(height: 12),
-            Container(
-              decoration: BoxDecoration(
-                color: const Color(0xFFF2ECEE),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              padding: const EdgeInsets.all(4),
-              child: Row(
-                children: const [
-                  Expanded(
-                    child: _InsightsTab(label: 'By Loan Type', active: true, icon: Icons.pie_chart_outline_rounded),
-                  ),
-                  SizedBox(width: 6),
-                  Expanded(
-                    child: _InsightsTab(label: 'By Time', active: false, icon: Icons.show_chart_rounded),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 4),
             LayoutBuilder(
               builder: (context, constraints) {
                 final asColumn = constraints.maxWidth < 700;
@@ -236,33 +234,49 @@ class _LoanInsightsPageState extends State<LoanInsightsPage> {
                         ),
                       ],
                     ),
-                    const Text('Daily Loans vs Soft Loans', style: TextStyle(color: Colors.black54, fontSize: 12)),
+                    const Text('Borrowed vs repaid vs outstanding', style: TextStyle(color: Colors.black54, fontSize: 12)),
                     const SizedBox(height: 8),
                     const Wrap(
                       spacing: 12,
                       runSpacing: 4,
                       children: [
-                        _LegendDot(color: Color(0xFF4BAF5E), label: 'Daily Repaid'),
-                        _LegendDot(color: Color(0xFF4A79C9), label: 'Soft Repaid'),
-                        _LegendDot(color: Color(0xFFD57B8A), label: 'Daily Outstanding'),
-                        _LegendDot(color: Color(0xFF8C76C8), label: 'Soft Outstanding'),
+                        _LegendDot(color: Color(0xFF4A79C9), label: 'Borrowed'),
+                        _LegendDot(color: Color(0xFF2CA95F), label: 'Repaid'),
+                        _LegendDot(color: Color(0xFFCB6262), label: 'Outstanding'),
                       ],
                     ),
                     const SizedBox(height: 8),
                     SizedBox(
-                      height: 150,
-                      child: CustomPaint(
-                        painter: _InsightsTrendPainter(
-                          points: trend.map((p) => _SplitTrendPoint(
-                            label: p.month,
-                            dailyRepaid: p.repaid * dailyPercent,
-                            softRepaid: p.repaid * softPercent,
-                            dailyOutstanding: p.outstanding * dailyPercent,
-                            softOutstanding: p.outstanding * softPercent,
-                          )).toList(),
-                        ),
-                        child: const SizedBox.expand(),
+                      height: 160,
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          SizedBox(
+                            width: 24,
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: _buildTrendScaleLabels(trendScale),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: CustomPaint(
+                              painter: _InsightsTrendPainter(points: trend, maxValue: trendScale),
+                              child: const SizedBox.expand(),
+                            ),
+                          ),
+                        ],
                       ),
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: trend
+                          .map((e) => Text(
+                                e.month,
+                                style: const TextStyle(fontSize: 11.5, color: Colors.black54),
+                              ))
+                          .toList(),
                     ),
                   ],
                 ),
@@ -514,7 +528,16 @@ class _LoanInsightsPageState extends State<LoanInsightsPage> {
                               decoration: BoxDecoration(color: colors[i], shape: BoxShape.circle),
                             ),
                             const SizedBox(width: 5),
-                            Expanded(child: Text(labels[i], style: const TextStyle(fontSize: 11.5))),
+                            Expanded(
+                              child: Text(
+                                labels[i],
+                                style: TextStyle(
+                                  fontSize: 11.5,
+                                  color: colors[i],
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
                           ],
                         ),
                       );
@@ -556,41 +579,114 @@ class _LoanInsightsPageState extends State<LoanInsightsPage> {
       ),
     );
   }
+
+  Widget _insightsBottomBar(BuildContext context) {
+    return SafeArea(
+      top: false,
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(14, 0, 14, 8),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8F0F1),
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            _InsightsBottomMiniNavItem(
+              icon: Icons.receipt_long_outlined,
+              label: "Transactions",
+              onTap: widget.onTransactionsTap,
+            ),
+            _InsightsBottomMiniNavItem(
+              icon: Icons.pie_chart_outline_rounded,
+              label: "Overview",
+              onTap: widget.onOverviewTap ?? () => Navigator.pop(context),
+            ),
+            const _InsightsBottomMiniNavItem(
+              icon: Icons.show_chart_rounded,
+              label: "Loan Insights",
+              active: true,
+            ),
+            _InsightsBottomMiniNavItem(
+              icon: Icons.bar_chart_rounded,
+              label: "Reports",
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const ReportsComingSoonPage(),
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  double _trendScale(List<LoanOverviewTrendPoint> points) {
+    var maxValue = 0.0;
+    for (final p in points) {
+      maxValue = math.max(maxValue, math.max(p.borrowed, math.max(p.repaid, p.outstanding)));
+    }
+    return maxValue <= 0 ? 1.0 : maxValue;
+  }
+
+  List<Widget> _buildTrendScaleLabels(double maxValue) {
+    final step = maxValue / 4;
+    return List.generate(5, (index) {
+      final value = step * (4 - index);
+      final label = value <= 0 ? '0' : AmountFormatter.compactNumber(value);
+      return Text(
+        label,
+        style: const TextStyle(fontSize: 11, color: Colors.black54),
+        textAlign: TextAlign.right,
+      );
+    });
+  }
 }
 
-class _InsightsTab extends StatelessWidget {
-  const _InsightsTab({
-    required this.label,
-    required this.active,
+class _InsightsBottomMiniNavItem extends StatelessWidget {
+  const _InsightsBottomMiniNavItem({
     required this.icon,
+    required this.label,
+    this.active = false,
+    this.onTap,
   });
 
+  final IconData icon;
   final String label;
   final bool active;
-  final IconData icon;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      decoration: BoxDecoration(
-        color: active ? Colors.white : Colors.transparent,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, size: 16, color: active ? const Color(0xFFB45A61) : Colors.black54),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: active ? FontWeight.w700 : FontWeight.w600,
-              color: active ? const Color(0xFFB45A61) : Colors.black54,
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        decoration: BoxDecoration(
+          color: active ? const Color(0xFFF4DCDD) : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 20, color: active ? const Color(0xFFB45A61) : const Color(0xFF6F6F72)),
+            const SizedBox(height: 3),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+                color: active ? const Color(0xFFB45A61) : const Color(0xFF6F6F72),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -614,32 +710,14 @@ class _LegendDot extends StatelessWidget {
   }
 }
 
-class _SplitTrendPoint {
-  _SplitTrendPoint({
-    required this.label,
-    required this.dailyRepaid,
-    required this.softRepaid,
-    required this.dailyOutstanding,
-    required this.softOutstanding,
-  });
-  final String label;
-  final double dailyRepaid;
-  final double softRepaid;
-  final double dailyOutstanding;
-  final double softOutstanding;
-}
-
 class _InsightsTrendPainter extends CustomPainter {
-  _InsightsTrendPainter({required this.points});
-  final List<_SplitTrendPoint> points;
+  _InsightsTrendPainter({required this.points, required this.maxValue});
+  final List<LoanOverviewTrendPoint> points;
+  final double maxValue;
 
   @override
   void paint(Canvas canvas, Size size) {
     if (points.isEmpty) return;
-    var maxVal = 1.0;
-    for (final p in points) {
-      maxVal = math.max(maxVal, math.max(p.dailyRepaid, math.max(p.softRepaid, math.max(p.dailyOutstanding, p.softOutstanding))));
-    }
 
     final gridPaint = Paint()..color = const Color(0xFFE8E8EA)..strokeWidth = 1;
     for (var i = 0; i < 5; i++) {
@@ -649,11 +727,11 @@ class _InsightsTrendPainter extends CustomPainter {
 
     Offset pointAt(int i, double val) {
       final x = points.length == 1 ? 0.0 : (size.width / (points.length - 1)) * i;
-      final y = (size.height - 18) - ((val / maxVal) * (size.height - 28)) + 2;
+      final y = (size.height - 18) - ((val / maxValue) * (size.height - 28)) + 2;
       return Offset(x, y);
     }
 
-    void draw(List<double> series, Color color, {bool dashed = false}) {
+    void draw(List<double> series, Color color) {
       final paint = Paint()
         ..color = color
         ..strokeWidth = 2
@@ -667,27 +745,19 @@ class _InsightsTrendPainter extends CustomPainter {
           path.lineTo(p.dx, p.dy);
         }
       }
-      if (dashed) {
-        final metrics = path.computeMetrics().toList();
-        for (final metric in metrics) {
-          double distance = 0;
-          while (distance < metric.length) {
-            const dash = 6.0;
-            const gap = 4.0;
-            final extracted = metric.extractPath(distance, distance + dash);
-            canvas.drawPath(extracted, paint);
-            distance += dash + gap;
-          }
-        }
-      } else {
-        canvas.drawPath(path, paint);
+      canvas.drawPath(path, paint);
+
+      final dot = Paint()..color = color;
+      for (var i = 0; i < series.length; i++) {
+        final p = pointAt(i, series[i]);
+        canvas.drawCircle(p, 3.4, dot);
+        canvas.drawCircle(p, 1.7, Paint()..color = Colors.white);
       }
     }
 
-    draw(points.map((e) => e.dailyRepaid).toList(), const Color(0xFF4BAF5E));
-    draw(points.map((e) => e.softRepaid).toList(), const Color(0xFF4A79C9));
-    draw(points.map((e) => e.dailyOutstanding).toList(), const Color(0xFFD57B8A), dashed: true);
-    draw(points.map((e) => e.softOutstanding).toList(), const Color(0xFF8C76C8), dashed: true);
+    draw(points.map((e) => e.borrowed).toList(), const Color(0xFF4A79C9));
+    draw(points.map((e) => e.repaid).toList(), const Color(0xFF2CA95F));
+    draw(points.map((e) => e.outstanding).toList(), const Color(0xFFCB6262));
   }
 
   @override

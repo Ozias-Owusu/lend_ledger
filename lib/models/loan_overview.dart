@@ -71,12 +71,24 @@ class LoanOverviewTrendPoint {
     required this.borrowed,
     required this.repaid,
     required this.outstanding,
+    this.dailyBorrowed,
+    this.softBorrowed,
+    this.dailyRepaid,
+    this.softRepaid,
+    this.dailyOutstanding,
+    this.softOutstanding,
   });
 
   final String month;
   final double borrowed;
   final double repaid;
   final double outstanding;
+  final double? dailyBorrowed;
+  final double? softBorrowed;
+  final double? dailyRepaid;
+  final double? softRepaid;
+  final double? dailyOutstanding;
+  final double? softOutstanding;
 
   factory LoanOverviewTrendPoint.fromJson(Map<String, dynamic> json) {
     return LoanOverviewTrendPoint(
@@ -84,6 +96,24 @@ class LoanOverviewTrendPoint {
       borrowed: _asDouble(json['borrowed']),
       repaid: _asDouble(json['repaid']),
       outstanding: _asDouble(json['outstanding']),
+      dailyBorrowed: _asNullableDouble(
+        json['dailyBorrowed'] ?? json['dailyLoanBorrowed'],
+      ),
+      softBorrowed: _asNullableDouble(
+        json['softBorrowed'] ?? json['softLoanBorrowed'],
+      ),
+      dailyRepaid: _asNullableDouble(
+        json['dailyRepaid'] ?? json['dailyLoanRepaid'],
+      ),
+      softRepaid: _asNullableDouble(
+        json['softRepaid'] ?? json['softLoanRepaid'],
+      ),
+      dailyOutstanding: _asNullableDouble(
+        json['dailyOutstanding'] ?? json['dailyLoanOutstanding'],
+      ),
+      softOutstanding: _asNullableDouble(
+        json['softOutstanding'] ?? json['softLoanOutstanding'],
+      ),
     );
   }
 }
@@ -94,12 +124,28 @@ class LoanTypeBreakdown {
     required this.softOutstanding,
     required this.dailyPercent,
     required this.softPercent,
+    this.dailyBorrowed,
+    this.softBorrowed,
+    this.dailyRepaid,
+    this.softRepaid,
+    this.dailyLoanCount,
+    this.softLoanCount,
+    this.dailyAvgLoanAmount,
+    this.softAvgLoanAmount,
   });
 
   final double dailyOutstanding;
   final double softOutstanding;
   final double dailyPercent;
   final double softPercent;
+  final double? dailyBorrowed;
+  final double? softBorrowed;
+  final double? dailyRepaid;
+  final double? softRepaid;
+  final int? dailyLoanCount;
+  final int? softLoanCount;
+  final double? dailyAvgLoanAmount;
+  final double? softAvgLoanAmount;
 
   factory LoanTypeBreakdown.fromJson(Map<String, dynamic> json) {
     return LoanTypeBreakdown(
@@ -107,6 +153,30 @@ class LoanTypeBreakdown {
       softOutstanding: _asDouble(json['softOutstanding']),
       dailyPercent: _fraction(_asDouble(json['dailyPercent'])),
       softPercent: _fraction(_asDouble(json['softPercent'])),
+      dailyBorrowed: _asNullableDouble(
+        json['dailyBorrowed'] ?? json['dailyLoanBorrowed'],
+      ),
+      softBorrowed: _asNullableDouble(
+        json['softBorrowed'] ?? json['softLoanBorrowed'],
+      ),
+      dailyRepaid: _asNullableDouble(
+        json['dailyRepaid'] ?? json['dailyLoanRepaid'],
+      ),
+      softRepaid: _asNullableDouble(
+        json['softRepaid'] ?? json['softLoanRepaid'],
+      ),
+      dailyLoanCount: _asNullableInt(
+        json['dailyLoanCount'] ?? json['dailyCount'],
+      ),
+      softLoanCount: _asNullableInt(
+        json['softLoanCount'] ?? json['softCount'],
+      ),
+      dailyAvgLoanAmount: _asNullableDouble(
+        json['dailyAvgLoanAmount'] ?? json['dailyAverageLoanAmount'],
+      ),
+      softAvgLoanAmount: _asNullableDouble(
+        json['softAvgLoanAmount'] ?? json['softAverageLoanAmount'],
+      ),
     );
   }
 }
@@ -233,6 +303,20 @@ double _asDouble(dynamic value) {
   if (value is double) return value;
   if (value is num) return value.toDouble();
   return double.tryParse('$value') ?? 0.0;
+}
+
+int? _asNullableInt(dynamic value) {
+  if (value == null) return null;
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  return int.tryParse('$value');
+}
+
+double? _asNullableDouble(dynamic value) {
+  if (value == null) return null;
+  if (value is double) return value;
+  if (value is num) return value.toDouble();
+  return double.tryParse('$value');
 }
 
 double _fraction(double value, {double fallback = 0}) {
