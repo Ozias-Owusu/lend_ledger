@@ -1,7 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:local_auth/local_auth.dart';
+import 'package:lend_ledger/app/app_keys.dart';
+import 'package:lend_ledger/models/auth/user_profile.dart';
 import 'package:lend_ledger/pages/EditProfilePage.dart';
+import 'package:lend_ledger/pages/admin_users_page.dart';
+import 'package:lend_ledger/pages/landing_page.dart';
 import 'package:lend_ledger/state/app_state.dart';
+import 'package:lend_ledger/utils/snackbar_utils.dart';
+import 'package:lend_ledger/widgets/user_profile_avatar.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -22,6 +28,10 @@ class _SettingsPageState extends State<SettingsPage> {
   void initState() {
     super.initState();
     _loadBiometrics();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.read<AppState>().loadCurrentUserProfile(force: true);
+    });
   }
 
   // Fetch available biometrics from the device
@@ -69,9 +79,18 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
+  Future<void> _openEditProfile(AppState appState) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const EditProfilePage()),
+    );
+    if (!mounted) return;
+    await appState.loadCurrentUserProfile(force: true);
+  }
+
   @override
   Widget build(BuildContext context) {
-    final appState = Provider.of<AppState>(context, listen: false);
+    final appState = Provider.of<AppState>(context);
 
     return Scaffold(
       backgroundColor: Colors.grey.shade100,
@@ -91,6 +110,30 @@ class _SettingsPageState extends State<SettingsPage> {
       body: ListView(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         children: [
+          _buildProfileHeader(appState),
+          const SizedBox(height: 20),
+
+          if (appState.isAdmin) ...[
+            _sectionTitle('Admin'),
+            _settingsGroup(
+              children: [
+                _settingsItem(
+                  icon: Icons.group_outlined,
+                  title: 'Manage Users',
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const AdminUsersPage(),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+          ],
+
           // ================= ACCOUNT SECTION ==================
           _sectionTitle("Account"),
 
@@ -99,12 +142,7 @@ class _SettingsPageState extends State<SettingsPage> {
               _settingsItem(
                 icon: Icons.person_outline,
                 title: "Edit Profile",
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const EditProfilePage()),
-                  );
-                },
+                onTap: () => _openEditProfile(appState),
               ),
 
               // --- NEW EXPANDABLE SECURITY SECTION ---
@@ -164,9 +202,10 @@ class _SettingsPageState extends State<SettingsPage> {
                 title: "Add Account",
                 onTap: () {},
               ),
-              _settingsItem(icon: Icons.logout,
-                  title: "Log out",
-                  onTap: () {}
+              _settingsItem(
+                icon: Icons.logout,
+                title: "Log out",
+                onTap: () => _handleLogout(appState),
               ),
             ],
           ),
@@ -273,6 +312,100 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
+  Widget _buildProfileHeader(AppState appState) {
+    if (appState.isLoadingUserProfile && appState.currentUserProfile == null) {
+      return Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    final profile = appState.currentUserProfile;
+    if (profile == null) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              appState.userProfileError ?? 'Could not load profile.',
+              style: TextStyle(color: Colors.red.shade700),
+            ),
+            const SizedBox(height: 8),
+            TextButton(
+              onPressed: () =>
+                  appState.loadCurrentUserProfile(force: true),
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return _ProfileSummaryCard(profile: profile);
+  }
+
+  Future<void> _handleLogout(AppState appState) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Log out?'),
+        content: const Text(
+          'You will be signed out of your account on this device. '
+          'You can sign in again anytime.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Log out'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      await appState.logout();
+    } catch (_) {
+      // Local session is cleared in AuthApiService even when the API call fails.
+    }
+
+    if (!mounted) return;
+    Navigator.of(context, rootNavigator: true).pop();
+
+    rootNavigatorKey.currentState?.pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LandingPage()),
+      (_) => false,
+    );
+
+    final messenger = rootScaffoldMessengerKey.currentState;
+    if (messenger != null) {
+      SnackbarUtils.showWithMessenger(
+        messenger,
+        'Logged out successfully.',
+      );
+    }
+  }
+
   // ============ WIDGET HELPERS (from your original code) ===================
   Widget _sectionTitle(String title) {
     // ... (This code is unchanged)
@@ -306,7 +439,6 @@ class _SettingsPageState extends State<SettingsPage> {
     required String title,
     VoidCallback? onTap,
   }) {
-    // ... (This code is unchanged)
     return Column(
       children: [
         ListTile(
@@ -323,3 +455,57 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 }
+
+class _ProfileSummaryCard extends StatelessWidget {
+  const _ProfileSummaryCard({required this.profile});
+
+  final UserProfile profile;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          UserProfileAvatar(profile: profile, radius: 34),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  profile.fullName,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  profile.email,
+                  style: TextStyle(color: Colors.grey.shade700),
+                ),
+                if (profile.primaryRole != null) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    profile.primaryRole!,
+                    style: TextStyle(
+                      color: Colors.indigo.shade700,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+

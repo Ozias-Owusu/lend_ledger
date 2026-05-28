@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../core/network/api_exception.dart';
+import '../services/auth_api_service.dart';
 import '../state/app_state.dart';
+import '../utils/snackbar_utils.dart';
 import 'app_shell_page.dart';
+import 'forgot_password_page.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -13,12 +17,15 @@ class _LoginPageState extends State<LoginPage> {
   final _formKey = GlobalKey<FormState>();
   final _emailCtl = TextEditingController();
   final _passCtl = TextEditingController();
+  final _confirmPassCtl = TextEditingController();
   final _nameCtl = TextEditingController();
 
   bool _loading = false;
   bool _isLogin = true;
   bool _showPassword = false;
+  bool _showConfirmPassword = false;
   bool _canUseBiometrics = false;
+  String _selectedRole = AuthApiService.availableRoles.first;
 
   @override
   void initState() {
@@ -65,7 +72,9 @@ class _LoginPageState extends State<LoginPage> {
       _formKey.currentState?.reset();
       _emailCtl.clear();
       _passCtl.clear();
+      _confirmPassCtl.clear();
       _nameCtl.clear();
+      _selectedRole = AuthApiService.availableRoles.first;
     });
   }
 
@@ -74,31 +83,50 @@ class _LoginPageState extends State<LoginPage> {
     setState(() => _loading = true);
 
     final appState = Provider.of<AppState>(context, listen: false);
-    bool success;
 
-    if (_isLogin) {
-      success = await appState.login(_emailCtl.text.trim(), _passCtl.text);
-    } else {
-      success = await appState.signUp(
-        name: _nameCtl.text.trim(),
-        email: _emailCtl.text.trim(),
-        password: _passCtl.text,
-      );
-    }
-
-    if (!mounted) return;
-    setState(() => _loading = false);
-
-    if (success) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (c) => const AppShellPage()),
-      );
-    } else {
-      final message = _isLogin ? 'Login failed' : 'Sign up failed';
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(message)));
+    try {
+      if (_isLogin) {
+        final success = await appState.login(
+          _emailCtl.text.trim(),
+          _passCtl.text,
+        );
+        if (!mounted) return;
+        setState(() => _loading = false);
+        if (success) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (c) => const AppShellPage()),
+          );
+        } else {
+          SnackbarUtils.showError(context, 'Invalid login credentials.');
+        }
+      } else {
+        final success = await appState.signUp(
+          name: _nameCtl.text.trim(),
+          email: _emailCtl.text.trim(),
+          password: _passCtl.text,
+          confirmPassword: _confirmPassCtl.text,
+          role: _selectedRole,
+        );
+        if (!mounted) return;
+        setState(() => _loading = false);
+        if (success) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (c) => const AppShellPage()),
+          );
+        } else {
+          SnackbarUtils.showError(context, 'Sign up failed.');
+        }
+      }
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+      SnackbarUtils.showError(context, e);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+      SnackbarUtils.showError(context, e);
     }
   }
 
@@ -198,7 +226,86 @@ class _LoginPageState extends State<LoginPage> {
                               return null;
                             },
                           ),
-                          const SizedBox(height: 32),
+                          if (!_isLogin) ...[
+                            const SizedBox(height: 16),
+                            _buildTextFormField(
+                              controller: _confirmPassCtl,
+                              isPassword: true,
+                              isConfirmPassword: true,
+                              label: 'Confirm Password',
+                              icon: Icons.lock_outline,
+                              validator: (v) {
+                                if (v == null || v.isEmpty) {
+                                  return 'Please confirm your password';
+                                }
+                                if (v != _passCtl.text) {
+                                  return 'Passwords do not match';
+                                }
+                                return null;
+                              },
+                            ),
+                            const SizedBox(height: 16),
+                            DropdownButtonFormField<String>(
+                              initialValue: _selectedRole,
+                              decoration: InputDecoration(
+                                labelText: 'Role',
+                                labelStyle: TextStyle(color: Colors.grey.shade700),
+                                prefixIcon: Icon(
+                                  Icons.badge_outlined,
+                                  color: Colors.grey.shade600,
+                                ),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12.0),
+                                ),
+                                filled: true,
+                                fillColor: Colors.grey.shade100,
+                              ),
+                              items: AuthApiService.availableRoles
+                                  .map(
+                                    (role) => DropdownMenuItem(
+                                      value: role,
+                                      child: Text(role),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: (value) {
+                                if (value == null) return;
+                                setState(() => _selectedRole = value);
+                              },
+                              validator: (value) {
+                                if (value == null || value.isEmpty) {
+                                  return 'Please select a role';
+                                }
+                                return null;
+                              },
+                            ),
+                          ],
+                          if (_isLogin) ...[
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: TextButton(
+                                onPressed: _loading
+                                    ? null
+                                    : () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => ForgotPasswordPage(
+                                              initialEmail: _emailCtl.text.trim(),
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                child: Text(
+                                  'Forgot password?',
+                                  style: TextStyle(
+                                    color: Colors.indigo.shade700,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 16),
 
                           // --- Submit Button or Loader ---
                           _loading
@@ -273,8 +380,13 @@ class _LoginPageState extends State<LoginPage> {
     IconData? icon,
     required String? Function(String?) validator,
     bool isPassword = false,
+    bool isConfirmPassword = false,
     TextInputType keyboardType = TextInputType.text,
   }) {
+    final obscure = isPassword
+        ? (isConfirmPassword ? !_showConfirmPassword : !_showPassword)
+        : false;
+
     return TextFormField(
       controller: controller,
       style: const TextStyle(color: Colors.black87),
@@ -286,12 +398,16 @@ class _LoginPageState extends State<LoginPage> {
         suffixIcon: isPassword
             ? IconButton(
                 icon: Icon(
-                  _showPassword ? Icons.visibility : Icons.visibility_off,
+                  obscure ? Icons.visibility : Icons.visibility_off,
                   color: Colors.grey.shade600,
                 ),
                 onPressed: () {
                   setState(() {
-                    _showPassword = !_showPassword;
+                    if (isConfirmPassword) {
+                      _showConfirmPassword = !_showConfirmPassword;
+                    } else {
+                      _showPassword = !_showPassword;
+                    }
                   });
                 },
               )
@@ -301,7 +417,7 @@ class _LoginPageState extends State<LoginPage> {
         filled: true,
         fillColor: Colors.grey.shade100,
       ),
-      obscureText: isPassword ? !_showPassword : false,
+      obscureText: obscure,
       validator: validator,
       keyboardType: keyboardType,
     );

@@ -1,22 +1,18 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
-import 'package:lend_ledger/config/api_config.dart';
+import 'package:lend_ledger/core/network/api_client.dart';
 
 class RepaymentsApiService {
+  RepaymentsApiService(this._apiClient);
+
+  final ApiClient _apiClient;
+
   Future<List<Map<String, dynamic>>> fetchAllTransactions() async {
-    final uri = Uri.parse(ApiConfig.endpoint('/api/Repayments/transactions'));
-    final response = await http.get(
-      uri,
+    final response = await _apiClient.get(
+      '/api/Repayments/transactions',
       headers: const {'accept': 'text/plain'},
     );
-
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception(
-        'Failed to fetch transactions. Status code: ${response.statusCode}',
-      );
-    }
 
     final decoded = jsonDecode(response.body);
     if (decoded is! List) {
@@ -26,15 +22,7 @@ class RepaymentsApiService {
   }
 
   Future<List<Map<String, dynamic>>> fetchAllRepayments() async {
-    final uri = Uri.parse(ApiConfig.endpoint('/api/Repayments'));
-    final response = await http.get(uri);
-
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception(
-        'Failed to fetch repayments. Status code: ${response.statusCode}',
-      );
-    }
-
+    final response = await _apiClient.get('/api/Repayments');
     final decoded = jsonDecode(response.body);
     if (decoded is! List) {
       throw Exception('Unexpected repayments response format.');
@@ -45,17 +33,7 @@ class RepaymentsApiService {
   Future<List<Map<String, dynamic>>> fetchRepaymentsByCustomer(
     String customerId,
   ) async {
-    final uri = Uri.parse(
-      ApiConfig.endpoint('/api/Repayments/customer/$customerId'),
-    );
-    final response = await http.get(uri);
-
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception(
-        'Failed to fetch repayments. Status code: ${response.statusCode}',
-      );
-    }
-
+    final response = await _apiClient.get('/api/Repayments/customer/$customerId');
     final decoded = jsonDecode(response.body);
     if (decoded is! List) {
       throw Exception('Unexpected repayments response format.');
@@ -72,7 +50,6 @@ class RepaymentsApiService {
     int installmentNumber = 0,
     String notes = '',
   }) async {
-    final uri = Uri.parse(ApiConfig.endpoint('/api/Repayments'));
     final body = <String, dynamic>{
       "customerId": customerId,
       "loanType": loanType,
@@ -84,22 +61,11 @@ class RepaymentsApiService {
     };
     final jsonBody = jsonEncode(body);
 
-    debugPrint('POST $uri');
+    debugPrint('POST /api/Repayments');
     debugPrint('Repayment payload: $jsonBody');
 
-    final response = await http.post(
-      uri,
-      headers: {"Content-Type": "application/json"},
-      body: jsonBody,
-    );
-
+    final response = await _apiClient.post('/api/Repayments', body: body);
     debugPrint('Repayment response status: ${response.statusCode}');
     debugPrint('Repayment response body: ${response.body}');
-
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception(
-        'Failed to create repayment. Status code: ${response.statusCode}',
-      );
-    }
   }
 }

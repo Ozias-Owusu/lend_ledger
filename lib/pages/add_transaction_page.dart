@@ -6,10 +6,11 @@ import 'package:lend_ledger/models/customer.dart';
 import 'package:lend_ledger/models/installment.dart';
 import 'package:lend_ledger/models/loan_record.dart';
 import 'package:lend_ledger/models/transactionRecord.dart';
-import 'package:lend_ledger/services/daily_loans_api_service.dart';
-import 'package:lend_ledger/services/repayments_api_service.dart';
-import 'package:lend_ledger/services/soft_loans_api_service.dart';
 import 'package:provider/provider.dart';
+import '../core/service_locator.dart';
+import '../services/daily_loans_api_service.dart';
+import '../services/repayments_api_service.dart';
+import '../services/soft_loans_api_service.dart';
 import '../state/app_state.dart';
 import '../utils/amount_formatter.dart';
 
@@ -52,9 +53,9 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
   List<LoanRecord> _customerLoans = [];
   double _outstandingBalance = 0.0;
   Installment? _selectedInstallment;
-  final DailyLoansApiService _dailyLoansApiService = DailyLoansApiService();
-  final SoftLoansApiService _softLoansApiService = SoftLoansApiService();
-  final RepaymentsApiService _repaymentsApiService = RepaymentsApiService();
+  DailyLoansApiService get _dailyLoansApiService => ServiceLocator.dailyLoansApi;
+  SoftLoansApiService get _softLoansApiService => ServiceLocator.softLoansApi;
+  RepaymentsApiService get _repaymentsApiService => ServiceLocator.repaymentsApi;
   bool _isSavingTransaction = false;
   late DateTime _selectedDateTime;
 

@@ -9,6 +9,7 @@ import '../models/loan_metrics.dart';
 import '../models/loan_overview.dart';
 import 'loan_insights_page.dart';
 import 'reports_coming_soon_page.dart';
+import '../core/service_locator.dart';
 import '../services/repayments_api_service.dart';
 import '../state/app_state.dart';
 import '../utils/amount_formatter.dart';
@@ -21,7 +22,7 @@ class DashboardPage extends StatefulWidget {
 }
 
 class _DashboardPageState extends State<DashboardPage> {
-  final RepaymentsApiService _repaymentsApiService = RepaymentsApiService();
+  RepaymentsApiService get _repaymentsApiService => ServiceLocator.repaymentsApi;
   late Future<void> _dashboardFuture;
   List<_DashboardTxn> _allTransactions = const [];
   String? _transactionsError;

@@ -61,22 +61,18 @@
 //   }
 // }
 
-import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:excel/excel.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:lend_ledger/models/customer.dart';
-import 'package:open_filex/open_filex.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import '../state/app_state.dart';
 import '../utils/amount_formatter.dart';
 import '../utils/image_data_utils.dart';
 import 'add_customer_page.dart';
 import 'customer_ledger_page.dart';
+import 'uploads_page.dart';
 
 class CustomersPage extends StatefulWidget {
   final bool openForLoan;
@@ -89,8 +85,6 @@ class CustomersPage extends StatefulWidget {
 class _CustomersPageState extends State<CustomersPage> {
   String _query = '';
   late Future<void> _initialLoad;
-  bool _isDownloadingTemplate = false;
-  bool _isUploadingImport = false;
 
   @override
   void initState() {
@@ -134,48 +128,6 @@ class _CustomersPageState extends State<CustomersPage> {
               onChanged: (v) => setState(() => _query = v),
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: _isDownloadingTemplate || _isUploadingImport
-                        ? null
-                        : _downloadTemplate,
-                    icon: _isDownloadingTemplate
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.download_rounded),
-                    label: const Text('Download Template'),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: FilledButton.icon(
-                    onPressed: _isUploadingImport || _isDownloadingTemplate
-                        ? null
-                        : _pickAndUploadFile,
-                    icon: _isUploadingImport
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Icon(Icons.upload_file_rounded),
-                    label: const Text('Upload File'),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
           Expanded(
             child: FutureBuilder<void>(
               future: _initialLoad,
@@ -348,14 +300,33 @@ class _CustomersPageState extends State<CustomersPage> {
 
       floatingActionButton: Padding(
         padding: const EdgeInsets.only(bottom: 76),
-        child: FloatingActionButton(
-          child: const Icon(Icons.person_add),
-          onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const AddCustomerPage()),
-            );
-          },
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            FloatingActionButton(
+              heroTag: 'add_customer_fab',
+              child: const Icon(Icons.person_add),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const AddCustomerPage()),
+                );
+              },
+            ),
+            const SizedBox(height: 10),
+            FloatingActionButton(
+              heroTag: 'uploads_fab',
+              backgroundColor: Theme.of(context).colorScheme.secondary,
+              foregroundColor: Theme.of(context).colorScheme.onSecondary,
+              child: const Icon(Icons.upload_file_rounded),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const UploadsPage()),
+                );
+              },
+            ),
+          ],
         ),
       ),
     );
@@ -448,185 +419,5 @@ class _CustomersPageState extends State<CustomersPage> {
 
   Uint8List? _profileBytes(String? profileBase64) {
     return ImageDataUtils.decodeToBytes(profileBase64);
-  }
-
-  Future<void> _downloadTemplate() async {
-    setState(() => _isDownloadingTemplate = true);
-    try {
-      final template = await context
-          .read<AppState>()
-          .downloadCustomersImportTemplate();
-      final dir = await getApplicationDocumentsDirectory();
-      final savePath = '${dir.path}/${template.filename}';
-      final file = File(savePath);
-      await file.writeAsBytes(template.bytes, flush: true);
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Template downloaded: ${template.filename}')),
-      );
-      await OpenFilex.open(savePath);
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to download template: $e')),
-      );
-    } finally {
-      if (mounted) {
-        setState(() => _isDownloadingTemplate = false);
-      }
-    }
-  }
-
-  Future<void> _pickAndUploadFile() async {
-    try {
-      final result = await FilePicker.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: const ['pdf', 'xls', 'xlsx', 'doc', 'docx'],
-      );
-      if (result == null) return;
-
-      final path = result.files.single.path;
-      if (path == null || path.isEmpty) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Invalid file selected.')),
-        );
-        return;
-      }
-
-      final confirmed = await _showFilePreview(path);
-      if (confirmed != true) {
-        return;
-      }
-
-      setState(() => _isUploadingImport = true);
-      await context.read<AppState>().importCustomersFileToApi(path);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Customers file uploaded successfully.')),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Upload failed: $e')),
-      );
-    } finally {
-      if (mounted) {
-        setState(() => _isUploadingImport = false);
-      }
-    }
-  }
-
-  Future<bool?> _showFilePreview(String path) async {
-    final file = File(path);
-    final name = path.split(Platform.pathSeparator).last;
-    final ext = name.split('.').last.toLowerCase();
-
-    Widget content;
-    if (ext == 'xlsx' || ext == 'xls') {
-      try {
-        final bytes = file.readAsBytesSync();
-        final excel = Excel.decodeBytes(bytes);
-        final sheetName = excel.tables.keys.isNotEmpty
-            ? excel.tables.keys.first
-            : null;
-        final sheet = sheetName != null ? excel.tables[sheetName] : null;
-        final rows = sheet?.rows ?? const [];
-
-        final previewRows = rows.take(10).toList();
-        content = Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              name,
-              style: const TextStyle(
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            if (sheetName != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 4, bottom: 8),
-                child: Text(
-                  'Sheet: $sheetName (showing first ${previewRows.length} rows)',
-                  style: const TextStyle(fontSize: 12, color: Colors.black54),
-                ),
-              ),
-            Flexible(
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(minWidth: 280),
-                  child: SingleChildScrollView(
-                    child: Table(
-                      defaultVerticalAlignment:
-                          TableCellVerticalAlignment.middle,
-                      border: TableBorder.all(
-                        color: const Color(0xFFE0E0E0),
-                      ),
-                      children: previewRows.map((row) {
-                        final cells = row
-                            .map((c) => (c?.value ?? '').toString())
-                            .toList();
-                        return TableRow(
-                          children: cells
-                              .map(
-                                (text) => Padding(
-                                  padding: const EdgeInsets.all(4),
-                                  child: Text(
-                                    text,
-                                    style: const TextStyle(fontSize: 11),
-                                  ),
-                                ),
-                              )
-                              .toList(),
-                        );
-                      }).toList(),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        );
-      } catch (_) {
-        content = Text(
-          'File: $name\n\nUnable to preview this Excel file, but you can still upload it.',
-          style: const TextStyle(fontSize: 13),
-        );
-      }
-    } else {
-      final sizeBytes = await file.length();
-      final sizeKb = (sizeBytes / 1024).toStringAsFixed(1);
-      content = Text(
-        'File: $name\nType: $ext\nSize: $sizeKb KB\n\nOnly Excel files can show a row preview. This file will still be uploaded if you continue.',
-        style: const TextStyle(fontSize: 13),
-      );
-    }
-
-    if (!mounted) return false;
-    return showDialog<bool>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Preview before upload'),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: content,
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Upload'),
-            ),
-          ],
-        );
-      },
-    );
   }
 }

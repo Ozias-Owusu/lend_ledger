@@ -1,10 +1,13 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
-import 'package:lend_ledger/config/api_config.dart';
+import 'package:lend_ledger/core/network/api_client.dart';
 
 class DailyLoansApiService {
+  DailyLoansApiService(this._apiClient);
+
+  final ApiClient _apiClient;
+
   Future<void> createDailyLoan({
     required String id,
     required String customerId,
@@ -17,7 +20,6 @@ class DailyLoansApiService {
     required String status,
     String notes = '',
   }) async {
-    final uri = Uri.parse(ApiConfig.endpoint('/api/DailyLoans'));
     final body = <String, dynamic>{
       "id": id,
       "customerId": customerId,
@@ -32,22 +34,11 @@ class DailyLoansApiService {
     };
     final jsonBody = jsonEncode(body);
 
-    debugPrint('POST $uri');
+    debugPrint('POST /api/DailyLoans');
     debugPrint('Daily loan payload: $jsonBody');
 
-    final response = await http.post(
-      uri,
-      headers: {"Content-Type": "application/json"},
-      body: jsonBody,
-    );
-
+    final response = await _apiClient.post('/api/DailyLoans', body: body);
     debugPrint('Daily loan response status: ${response.statusCode}');
     debugPrint('Daily loan response body: ${response.body}');
-
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception(
-        'Failed to create daily loan. Status code: ${response.statusCode}',
-      );
-    }
   }
 }

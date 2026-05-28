@@ -386,6 +386,11 @@ import 'package:lend_ledger/models/customer.dart';
 import 'package:lend_ledger/models/loan_record.dart';
 import 'package:lend_ledger/models/loan_metrics.dart';
 import 'package:lend_ledger/models/transactionRecord.dart';
+import 'package:lend_ledger/core/auth/session_navigation.dart' as session_nav;
+import 'package:lend_ledger/core/service_locator.dart';
+import 'package:lend_ledger/models/auth/auth_requests.dart';
+import 'package:lend_ledger/models/auth/user_profile.dart';
+import 'package:lend_ledger/models/auth_tokens.dart';
 import 'package:lend_ledger/services/customers_api_service.dart';
 import 'package:lend_ledger/services/loan_metrics_api_service.dart';
 import 'package:uuid/uuid.dart';
@@ -398,9 +403,10 @@ class AppState extends ChangeNotifier {
   final CustomersDao _customersDao = CustomersDao();
   final TransactionsDao _transactionsDao = TransactionsDao();
   final SoftLoanDao _softLoanDao = SoftLoanDao();
-  final CustomersApiService _customersApiService = CustomersApiService();
-  final LoanMetricsApiService _loanMetricsApiService = LoanMetricsApiService();
   final LocalAuthentication auth = LocalAuthentication();
+
+  CustomersApiService get _customersApiService => ServiceLocator.customersApi;
+  LoanMetricsApiService get _loanMetricsApiService => ServiceLocator.loanMetricsApi;
 
   // --- In-memory state ---
   List<Customer> customers = [];
@@ -414,15 +420,101 @@ class AppState extends ChangeNotifier {
   bool isLoggedIn = false;
   String loggedInEmail = '';
   String loggedInUserName = '';
+  String? userRole;
+  UserProfile? currentUserProfile;
+  bool isLoadingUserProfile = false;
+  String? userProfileError;
 
   // --- Core Data Loading ---
+  Future<void> initialize() async {
+    await loadFromDb();
+    isLoggedIn = await restoreSession();
+    notifyListeners();
+  }
+
   Future<void> loadFromDb() async {
     customers = await _customersDao.getAllCustomers();
     transactions = await _transactionsDao.getAllTransactions();
-    final sp = await SharedPreferences.getInstance();
-    isLoggedIn = sp.getBool('isLoggedIn') ?? false;
-    loggedInEmail = sp.getString('loggedInEmail') ?? '';
-    loggedInUserName = sp.getString('loggedInUserName') ?? '';
+    notifyListeners();
+  }
+
+  Future<bool> restoreSession() async {
+    final hasRefresh = await ServiceLocator.tokenStorage.hasRefreshToken();
+    if (!hasRefresh) {
+      isLoggedIn = false;
+      return false;
+    }
+
+    try {
+      await ServiceLocator.authApi.refreshTokens();
+      await _hydrateUserFromSecureStorage();
+      isLoggedIn = true;
+      return true;
+    } catch (_) {
+      await ServiceLocator.tokenStorage.clearAll();
+      isLoggedIn = false;
+      loggedInEmail = '';
+      loggedInUserName = '';
+      return false;
+    }
+  }
+
+  Future<void> _hydrateUserFromSecureStorage() async {
+    loggedInEmail = await ServiceLocator.tokenStorage.getUserEmail() ?? '';
+    loggedInUserName = await ServiceLocator.tokenStorage.getUserName() ?? '';
+    userRole = await ServiceLocator.tokenStorage.getUserRole();
+  }
+
+  bool get isAdmin {
+    final profileRoles = currentUserProfile?.roles ?? const [];
+    if (profileRoles.any((role) => role.toLowerCase() == 'admin')) {
+      return true;
+    }
+    return userRole?.toLowerCase() == 'admin';
+  }
+
+  Future<List<UserProfile>> fetchAllUsers() {
+    return ServiceLocator.authApi.getAllUsers();
+  }
+
+  Future<void> deleteUser(String userId) {
+    return ServiceLocator.authApi.deleteUser(userId);
+  }
+
+  Future<UserProfile?> loadCurrentUserProfile({
+    bool force = false,
+    bool notify = true,
+  }) async {
+    if (!force && currentUserProfile != null && !isLoadingUserProfile) {
+      return currentUserProfile;
+    }
+
+    isLoadingUserProfile = true;
+    userProfileError = null;
+    if (notify) notifyListeners();
+
+    try {
+      final profile = await ServiceLocator.authApi.getCurrentUser();
+      currentUserProfile = profile;
+      loggedInEmail = profile.email;
+      loggedInUserName = profile.fullName;
+      userRole = profile.primaryRole ?? userRole;
+      userProfileError = null;
+      return profile;
+    } catch (e) {
+      userProfileError = e.toString();
+      return null;
+    } finally {
+      isLoadingUserProfile = false;
+      if (notify) notifyListeners();
+    }
+  }
+
+  Future<void> _applyAuthenticatedSession(AuthTokens tokens) async {
+    isLoggedIn = true;
+    loggedInEmail = tokens.email ?? loggedInEmail;
+    loggedInUserName = tokens.fullName ?? loggedInUserName;
+    userRole = tokens.role ?? userRole;
     notifyListeners();
   }
 
@@ -495,11 +587,26 @@ class AppState extends ChangeNotifier {
   }
 
   Future<CustomersImportTemplate> downloadCustomersImportTemplate() {
-    return _customersApiService.downloadImportTemplate();
+    return ServiceLocator.customersApi.downloadImportTemplate();
+  }
+
+  Future<CustomersImportTemplate> downloadImportTemplateByPath(String path) {
+    return ServiceLocator.customersApi.downloadImportTemplateByPath(path);
   }
 
   Future<void> importCustomersFileToApi(String filePath) async {
-    await _customersApiService.importCustomersFile(filePath);
+    await ServiceLocator.customersApi.importCustomersFile(filePath);
+    await loadCustomersFromApi();
+  }
+
+  Future<void> importFileToApiByPath({
+    required String endpointPath,
+    required String filePath,
+  }) async {
+    await ServiceLocator.customersApi.importFileByPath(
+      endpointPath: endpointPath,
+      filePath: filePath,
+    );
     await loadCustomersFromApi();
   }
 
@@ -553,19 +660,15 @@ class AppState extends ChangeNotifier {
         biometricOnly: true,
       );
       if (didAuthenticate) {
-        final sp = await SharedPreferences.getInstance();
-        loggedInEmail = sp.getString('registered_email') ?? '';
-        loggedInUserName = sp.getString('registered_name') ?? '';
+        final hasSession = await ServiceLocator.tokenStorage.hasRefreshToken();
+        if (!hasSession) return false;
+        await _hydrateUserFromSecureStorage();
         isLoggedIn = true;
-        await sp.setBool('isLoggedIn', true);
-        await sp.setString('loggedInEmail', loggedInEmail);
-        await sp.setString('loggedInUserName', loggedInUserName);
         notifyListeners();
         return true;
       }
       return false;
-    } catch (e) {
-      print("Biometric login error: $e");
+    } catch (_) {
       return false;
     }
   }
@@ -574,52 +677,96 @@ class AppState extends ChangeNotifier {
     required String name,
     required String email,
     required String password,
+    required String confirmPassword,
+    required String role,
   }) async {
     if (name.isEmpty || email.isEmpty || password.length < 6) return false;
-    final sp = await SharedPreferences.getInstance();
-    await sp.setString('registered_email', email);
-    await sp.setString('registered_password', password);
-    await sp.setString('registered_name', name);
-    isLoggedIn = true;
-    loggedInEmail = email;
-    loggedInUserName = name;
-    await sp.setBool('isLoggedIn', true);
-    await sp.setString('loggedInEmail', email);
-    await sp.setString('loggedInUserName', name);
-    notifyListeners();
+    if (password != confirmPassword) return false;
+
+    final auth = await ServiceLocator.authApi.register(
+      fullName: name,
+      email: email,
+      password: password,
+      confirmPassword: confirmPassword,
+      role: role,
+    );
+    await _applyAuthenticatedSession(AuthTokens.fromAuthResponse(auth));
     return true;
   }
 
   Future<bool> login(String email, String password) async {
-    final sp = await SharedPreferences.getInstance();
-    final registeredEmail = sp.getString('registered_email');
-    final registeredPassword = sp.getString('registered_password');
-    final registeredName = sp.getString('registered_name') ?? '';
-    if (email.isNotEmpty &&
-        password.isNotEmpty &&
-        email == registeredEmail &&
-        password == registeredPassword) {
-      isLoggedIn = true;
-      loggedInEmail = email;
-      loggedInUserName = registeredName;
-      await sp.setBool('isLoggedIn', true);
-      await sp.setString('loggedInEmail', email);
-      await sp.setString('loggedInUserName', registeredName);
-      notifyListeners();
-      return true;
-    }
-    return false;
+    if (email.isEmpty || password.isEmpty) return false;
+    final auth = await ServiceLocator.authApi.login(
+      email: email.trim(),
+      password: password,
+    );
+    await _applyAuthenticatedSession(AuthTokens.fromAuthResponse(auth));
+    return true;
+  }
+
+  Future<void> forgotPassword(String email) async {
+    await ServiceLocator.authApi.forgotPassword(
+      ForgotPasswordRequest(email: email.trim()),
+    );
+  }
+
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+    required String confirmPassword,
+  }) async {
+    await ServiceLocator.authApi.changePassword(
+      ChangePasswordRequest(
+        currentPassword: currentPassword,
+        newPassword: newPassword,
+        confirmPassword: confirmPassword,
+      ),
+    );
+  }
+
+  Future<void> resetPassword({
+    required String email,
+    required String token,
+    required String newPassword,
+    required String confirmPassword,
+  }) async {
+    await ServiceLocator.authApi.resetPassword(
+      ResetPasswordRequest(
+        email: email.trim(),
+        token: token.trim(),
+        newPassword: newPassword,
+        confirmPassword: confirmPassword,
+      ),
+    );
   }
 
   Future<void> logout() async {
-    final sp = await SharedPreferences.getInstance();
+    await ServiceLocator.authApi.logout();
     isLoggedIn = false;
     loggedInEmail = '';
     loggedInUserName = '';
-    await sp.setBool('isLoggedIn', false);
-    await sp.setString('loggedInEmail', '');
-    await sp.setString('loggedInUserName', '');
+    userRole = null;
+    currentUserProfile = null;
+    userProfileError = null;
     notifyListeners();
+  }
+
+  void handleSessionExpired() {
+    isLoggedIn = false;
+    loggedInEmail = '';
+    loggedInUserName = '';
+    userRole = null;
+    currentUserProfile = null;
+    userProfileError = null;
+    notifyListeners();
+  }
+
+  /// Clears session and routes user to landing/sign-in entry.
+  void navigateToSignInLanding({
+    String message = 'Your session has expired. Please login again.',
+  }) {
+    handleSessionExpired();
+    session_nav.navigateToSignInLanding(message: message);
   }
 
   // --- Customer & Transaction Operations ---

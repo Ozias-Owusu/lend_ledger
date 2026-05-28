@@ -1,6 +1,8 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:lend_ledger/state/app_state.dart';
+import 'package:provider/provider.dart';
 
 import 'customers_page.dart';
 import 'dashboard_page.dart';
@@ -111,7 +113,12 @@ class _AppShellPageState extends State<AppShellPage> {
   }) {
     final isActive = _selectedNavIndex == index;
     return InkWell(
-      onTap: () => setState(() => _selectedNavIndex = index),
+      onTap: () {
+        setState(() => _selectedNavIndex = index);
+        if (index == 3) {
+          context.read<AppState>().loadCurrentUserProfile(force: true);
+        }
+      },
       borderRadius: BorderRadius.circular(26),
       child: AnimatedSwitcher(
         duration: const Duration(milliseconds: 180),
