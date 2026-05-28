@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../models/loan_overview.dart';
-import '../pages/reports_coming_soon_page.dart';
 import '../state/app_state.dart';
 import '../utils/amount_formatter.dart';
 
@@ -12,13 +11,11 @@ class LoanInsightsPage extends StatefulWidget {
   const LoanInsightsPage({
     super.key,
     this.initialOverview,
-    this.onTransactionsTap,
-    this.onOverviewTap,
+    this.bottomNavigationBar,
   });
 
   final LoanOverview? initialOverview;
-  final VoidCallback? onTransactionsTap;
-  final VoidCallback? onOverviewTap;
+  final Widget? bottomNavigationBar;
 
   @override
   State<LoanInsightsPage> createState() => _LoanInsightsPageState();
@@ -106,29 +103,13 @@ class _LoanInsightsPageState extends State<LoanInsightsPage> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF7F7F8),
-      bottomNavigationBar: _insightsBottomBar(context),
+      bottomNavigationBar: widget.bottomNavigationBar,
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(14, 8, 14, 12),
           children: [
             Row(
               children: [
-                Container(
-                  width: 38,
-                  height: 38,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFFECECEF)),
-                  ),
-                  child: IconButton(
-                    padding: EdgeInsets.zero,
-                    iconSize: 17,
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.arrow_back_ios_new_rounded),
-                  ),
-                ),
-                const SizedBox(width: 10),
                 const Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -580,52 +561,6 @@ class _LoanInsightsPageState extends State<LoanInsightsPage> {
     );
   }
 
-  Widget _insightsBottomBar(BuildContext context) {
-    return SafeArea(
-      top: false,
-      child: Container(
-        margin: const EdgeInsets.fromLTRB(14, 0, 14, 8),
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF8F0F1),
-          borderRadius: BorderRadius.circular(18),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            _InsightsBottomMiniNavItem(
-              icon: Icons.receipt_long_outlined,
-              label: "Transactions",
-              onTap: widget.onTransactionsTap,
-            ),
-            _InsightsBottomMiniNavItem(
-              icon: Icons.pie_chart_outline_rounded,
-              label: "Overview",
-              onTap: widget.onOverviewTap ?? () => Navigator.pop(context),
-            ),
-            const _InsightsBottomMiniNavItem(
-              icon: Icons.show_chart_rounded,
-              label: "Loan Insights",
-              active: true,
-            ),
-            _InsightsBottomMiniNavItem(
-              icon: Icons.bar_chart_rounded,
-              label: "Reports",
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const ReportsComingSoonPage(),
-                  ),
-                );
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   double _trendScale(List<LoanOverviewTrendPoint> points) {
     var maxValue = 0.0;
     for (final p in points) {
@@ -645,50 +580,6 @@ class _LoanInsightsPageState extends State<LoanInsightsPage> {
         textAlign: TextAlign.right,
       );
     });
-  }
-}
-
-class _InsightsBottomMiniNavItem extends StatelessWidget {
-  const _InsightsBottomMiniNavItem({
-    required this.icon,
-    required this.label,
-    this.active = false,
-    this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final bool active;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-        decoration: BoxDecoration(
-          color: active ? const Color(0xFFF4DCDD) : Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 20, color: active ? const Color(0xFFB45A61) : const Color(0xFF6F6F72)),
-            const SizedBox(height: 3),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-                color: active ? const Color(0xFFB45A61) : const Color(0xFF6F6F72),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }
 

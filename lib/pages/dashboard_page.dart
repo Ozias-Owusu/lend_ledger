@@ -9,6 +9,7 @@ import '../models/loan_metrics.dart';
 import '../models/loan_overview.dart';
 import 'loan_insights_page.dart';
 import 'reports_coming_soon_page.dart';
+import '../widgets/dashboard_mini_bottom_nav.dart';
 import '../core/service_locator.dart';
 import '../services/repayments_api_service.dart';
 import '../state/app_state.dart';
@@ -24,7 +25,7 @@ class DashboardPage extends StatefulWidget {
 class _DashboardPageState extends State<DashboardPage> {
   RepaymentsApiService get _repaymentsApiService => ServiceLocator.repaymentsApi;
   late Future<void> _dashboardFuture;
-  List<_DashboardTxn> _allTransactions = const [];
+  List<DashboardTxn> _allTransactions = const [];
   String? _transactionsError;
 
   @override
@@ -154,7 +155,7 @@ class _DashboardPageState extends State<DashboardPage> {
                                         Navigator.push(
                                           context,
                                           MaterialPageRoute(
-                                            builder: (_) => _AllTransactionsPage(
+                                            builder: (_) => AllTransactionsPage(
                                               transactions: _allTransactions,
                                               metrics: state.dashboardMetrics,
                                               overview: state.dashboardOverview,
@@ -176,7 +177,7 @@ class _DashboardPageState extends State<DashboardPage> {
                                   Navigator.push(
                                     context,
                                     MaterialPageRoute(
-                                      builder: (_) => _OverviewPage(
+                                      builder: (_) => OverviewPage(
                                         metrics: state.dashboardMetrics,
                                         overview: state.dashboardOverview,
                                         transactions: _allTransactions,
@@ -195,37 +196,12 @@ class _DashboardPageState extends State<DashboardPage> {
                                 iconBg: const Color(0xFFECF7F0),
                                 iconColor: const Color(0xFF4EA573),
                                 onTap: () {
-                                  Navigator.push(
+                                  DashboardFlowNav.openLoanInsights(
                                     context,
-                                    MaterialPageRoute(
-                                      builder: (_) => LoanInsightsPage(
-                                        initialOverview: state.dashboardOverview,
-                                        onTransactionsTap: () {
-                                          Navigator.pushReplacement(
-                                            context,
-                                            MaterialPageRoute(
-                                              builder: (_) => _AllTransactionsPage(
-                                                transactions: _allTransactions,
-                                                metrics: state.dashboardMetrics,
-                                                overview: state.dashboardOverview,
-                                              ),
-                                            ),
-                                          );
-                                        },
-                                        onOverviewTap: () {
-                                          Navigator.pushReplacement(
-                                            context,
-                                            MaterialPageRoute(
-                                              builder: (_) => _OverviewPage(
-                                                metrics: state.dashboardMetrics,
-                                                overview: state.dashboardOverview,
-                                                transactions: _allTransactions,
-                                              ),
-                                            ),
-                                          );
-                                        },
-                                      ),
-                                    ),
+                                    metrics: state.dashboardMetrics,
+                                    overview: state.dashboardOverview,
+                                    transactions: _allTransactions,
+                                    initialOverview: state.dashboardOverview,
                                   );
                                 },
                               ),
@@ -239,11 +215,11 @@ class _DashboardPageState extends State<DashboardPage> {
                                 iconBg: const Color(0xFFF3ECFB),
                                 iconColor: const Color(0xFF8F6BC6),
                                 onTap: () {
-                                  Navigator.push(
+                                  DashboardFlowNav.openReports(
                                     context,
-                                    MaterialPageRoute(
-                                      builder: (_) => const ReportsComingSoonPage(),
-                                    ),
+                                    metrics: state.dashboardMetrics,
+                                    overview: state.dashboardOverview,
+                                    transactions: _allTransactions,
                                   );
                                 },
                               ),
@@ -275,7 +251,7 @@ class _DashboardPageState extends State<DashboardPage> {
                                   Navigator.push(
                                     context,
                                     MaterialPageRoute(
-                                      builder: (_) => _AllTransactionsPage(
+                                      builder: (_) => AllTransactionsPage(
                                         transactions: remainingTransactions,
                                         metrics: state.dashboardMetrics,
                                         overview: state.dashboardOverview,
@@ -327,7 +303,7 @@ class _DashboardPageState extends State<DashboardPage> {
 
   Widget _buildTransactionCard(
     BuildContext context,
-    _DashboardTxn transaction,
+    DashboardTxn transaction,
   ) {
     final isLoan = transaction.isLoan;
     final amountLabel = isLoan
@@ -370,7 +346,7 @@ class _DashboardPageState extends State<DashboardPage> {
 
     try {
       final transactions = await _repaymentsApiService.fetchAllTransactions();
-      final tx = <_DashboardTxn>[];
+      final tx = <DashboardTxn>[];
 
       for (final item in transactions) {
         final loanType = (item['loanType'] ?? '').toString().trim();
@@ -382,7 +358,7 @@ class _DashboardPageState extends State<DashboardPage> {
             lowerNotes.contains('new loan');
 
         tx.add(
-          _DashboardTxn(
+          DashboardTxn(
             customerId: (item['customerId'] ?? '').toString(),
             customerName: customerName.isEmpty ? 'Unknown customer' : customerName,
             customerProfileImage: item['customerProfileImage']?.toString(),
@@ -509,14 +485,14 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 }
 
-class _AllTransactionsPage extends StatelessWidget {
-  const _AllTransactionsPage({
+class AllTransactionsPage extends StatelessWidget {
+  const AllTransactionsPage({
     required this.transactions,
     this.metrics,
     this.overview,
   });
 
-  final List<_DashboardTxn> transactions;
+  final List<DashboardTxn> transactions;
   final LoanMetrics? metrics;
   final LoanOverview? overview;
 
@@ -524,7 +500,12 @@ class _AllTransactionsPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text("All Transactions")),
-      bottomNavigationBar: _transactionsBottomBar(context),
+      bottomNavigationBar: DashboardFlowNav.miniBottomNav(
+        activeTab: DashboardMiniNavTab.transactions,
+        metrics: metrics,
+        overview: overview,
+        transactions: transactions,
+      ),
       body: transactions.isEmpty
           ? const Center(child: Text("No transactions available"))
           : ListView.builder(
@@ -568,88 +549,10 @@ class _AllTransactionsPage extends StatelessWidget {
     );
   }
 
-  Widget _transactionsBottomBar(BuildContext context) {
-    return SafeArea(
-      top: false,
-      child: Container(
-        margin: const EdgeInsets.fromLTRB(14, 0, 14, 8),
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF8F0F1),
-          borderRadius: BorderRadius.circular(18),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            const _BottomMiniNavItem(
-              icon: Icons.receipt_long_outlined,
-              label: "Transactions",
-              active: true,
-            ),
-            _BottomMiniNavItem(
-              icon: Icons.pie_chart_outline_rounded,
-              label: "Overview",
-              onTap: () {
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => _OverviewPage(
-                      metrics: metrics,
-                      overview: overview,
-                      transactions: transactions,
-                    ),
-                  ),
-                );
-              },
-            ),
-            _BottomMiniNavItem(
-              icon: Icons.show_chart_rounded,
-              label: "Loan Insights",
-              onTap: () {
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => LoanInsightsPage(
-                      initialOverview: overview,
-                      onTransactionsTap: () => Navigator.pop(context),
-                      onOverviewTap: () {
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => _OverviewPage(
-                              metrics: metrics,
-                              overview: overview,
-                              transactions: transactions,
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                );
-              },
-            ),
-            _BottomMiniNavItem(
-              icon: Icons.bar_chart_rounded,
-              label: "Reports",
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const ReportsComingSoonPage(),
-                  ),
-                );
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
-class _OverviewPage extends StatefulWidget {
-  const _OverviewPage({
+class OverviewPage extends StatefulWidget {
+  const OverviewPage({
     required this.metrics,
     required this.overview,
     required this.transactions,
@@ -657,13 +560,13 @@ class _OverviewPage extends StatefulWidget {
 
   final LoanMetrics? metrics;
   final LoanOverview? overview;
-  final List<_DashboardTxn> transactions;
+  final List<DashboardTxn> transactions;
 
   @override
-  State<_OverviewPage> createState() => _OverviewPageState();
+  State<OverviewPage> createState() => OverviewPageState();
 }
 
-class _OverviewPageState extends State<_OverviewPage> {
+class OverviewPageState extends State<OverviewPage> {
   late LoanOverview? _overview;
   int _selectedMonths = 6;
   bool _isLoadingOverview = false;
@@ -774,29 +677,18 @@ class _OverviewPageState extends State<_OverviewPage> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF7F7F8),
-      bottomNavigationBar: _overviewBottomBar(context),
+      bottomNavigationBar: DashboardFlowNav.miniBottomNav(
+        activeTab: DashboardMiniNavTab.overview,
+        metrics: widget.metrics,
+        overview: _overview,
+        transactions: widget.transactions,
+      ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
         children: [
           const SizedBox(height: 8),
           Row(
             children: [
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFFECECEF)),
-                ),
-                child: IconButton(
-                  padding: EdgeInsets.zero,
-                  iconSize: 17,
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.arrow_back_ios_new_rounded),
-                ),
-              ),
-              const SizedBox(width: 10),
               const Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1189,12 +1081,12 @@ class _OverviewPageState extends State<_OverviewPage> {
     );
   }
 
-  int _countCustomers(List<_DashboardTxn> txs) {
+  int _countCustomers(List<DashboardTxn> txs) {
     return txs.map((t) => t.customerId).toSet().length;
   }
 
   List<_OutstandingCustomer> _topOutstandingCustomers({
-    required List<_DashboardTxn> fallbackTxs,
+    required List<DashboardTxn> fallbackTxs,
     required List<OverviewTopCustomer> overviewItems,
   }) {
     if (overviewItems.isNotEmpty) {
@@ -1328,87 +1220,8 @@ class _OverviewPageState extends State<_OverviewPage> {
     );
   }
 
-  Widget _overviewBottomBar(BuildContext context) {
-    return SafeArea(
-      top: false,
-      child: Container(
-        margin: const EdgeInsets.fromLTRB(14, 0, 14, 8),
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF8F0F1),
-          borderRadius: BorderRadius.circular(18),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            _BottomMiniNavItem(
-              icon: Icons.receipt_long_outlined,
-              label: "Transactions",
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => _AllTransactionsPage(
-                      transactions: widget.transactions,
-                      metrics: widget.metrics,
-                      overview: _overview,
-                    ),
-                  ),
-                );
-              },
-            ),
-            _BottomMiniNavItem(
-              icon: Icons.pie_chart_outline_rounded,
-              label: "Overview",
-              active: true,
-            ),
-            _BottomMiniNavItem(
-              icon: Icons.show_chart_rounded,
-              label: "Loan Insights",
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => LoanInsightsPage(
-                      initialOverview: _overview,
-                      onTransactionsTap: () {
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => _AllTransactionsPage(
-                              transactions: widget.transactions,
-                              metrics: widget.metrics,
-                              overview: _overview,
-                            ),
-                          ),
-                        );
-                      },
-                      onOverviewTap: () => Navigator.pop(context),
-                    ),
-                  ),
-                );
-              },
-            ),
-            _BottomMiniNavItem(
-              icon: Icons.bar_chart_rounded,
-              label: "Reports",
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const ReportsComingSoonPage(),
-                  ),
-                );
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   List<_TrendPoint> _buildTrendPoints({
-    required List<_DashboardTxn> fallbackTxs,
+    required List<DashboardTxn> fallbackTxs,
     required List<LoanOverviewTrendPoint> overviewPoints,
   }) {
     if (overviewPoints.isNotEmpty) {
@@ -1579,50 +1392,6 @@ class _LegendDot extends StatelessWidget {
   }
 }
 
-class _BottomMiniNavItem extends StatelessWidget {
-  const _BottomMiniNavItem({
-    required this.icon,
-    required this.label,
-    this.active = false,
-    this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final bool active;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-        decoration: BoxDecoration(
-          color: active ? const Color(0xFFF4DCDD) : Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 20, color: active ? const Color(0xFFB45A61) : const Color(0xFF6F6F72)),
-            const SizedBox(height: 3),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-                color: active ? const Color(0xFFB45A61) : const Color(0xFF6F6F72),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class _RingPainter extends CustomPainter {
   _RingPainter({required this.segments});
   final List<_RingSegment> segments;
@@ -1687,8 +1456,8 @@ class _TrendPoint {
   final double outstanding;
 }
 
-class _DashboardTxn {
-  const _DashboardTxn({
+class DashboardTxn {
+  const DashboardTxn({
     required this.customerId,
     required this.customerName,
     required this.customerProfileImage,
@@ -1707,7 +1476,7 @@ class _DashboardTxn {
   final String label;
 }
 
-Widget _txnAvatarWidget(_DashboardTxn transaction) {
+Widget _txnAvatarWidget(DashboardTxn transaction) {
   final bytes = _profileImageBytes(transaction.customerProfileImage);
   if (bytes != null) {
     return ClipOval(
@@ -1779,4 +1548,216 @@ String _readableDateTime(String value) {
   final hour12 = (hour24 % 12 == 0) ? 12 : hour24 % 12;
 
   return '$month $day, $year • $hour12:$minute $period';
+}
+
+class DashboardFlowNav {
+  DashboardFlowNav._();
+
+  static void openTransactions(
+    BuildContext context, {
+    required LoanMetrics? metrics,
+    required LoanOverview? overview,
+    required List<DashboardTxn> transactions,
+  }) {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AllTransactionsPage(
+          transactions: transactions,
+          metrics: metrics,
+          overview: overview,
+        ),
+      ),
+    );
+  }
+
+  static void openOverview(
+    BuildContext context, {
+    required LoanMetrics? metrics,
+    required LoanOverview? overview,
+    required List<DashboardTxn> transactions,
+  }) {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => OverviewPage(
+          metrics: metrics,
+          overview: overview,
+          transactions: transactions,
+        ),
+      ),
+    );
+  }
+
+  static void openLoanInsights(
+    BuildContext context, {
+    required LoanMetrics? metrics,
+    required LoanOverview? overview,
+    required List<DashboardTxn> transactions,
+    LoanOverview? initialOverview,
+  }) {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => LoanInsightsPage(
+          initialOverview: initialOverview ?? overview,
+          bottomNavigationBar: miniBottomNav(
+            activeTab: DashboardMiniNavTab.loanInsights,
+            metrics: metrics,
+            overview: overview,
+            transactions: transactions,
+          ),
+        ),
+      ),
+    );
+  }
+
+  static void openReports(
+    BuildContext context, {
+    required LoanMetrics? metrics,
+    required LoanOverview? overview,
+    required List<DashboardTxn> transactions,
+  }) {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ReportsComingSoonPage(
+          showBackButton: false,
+          bottomNavigationBar: miniBottomNav(
+            activeTab: DashboardMiniNavTab.reports,
+            metrics: metrics,
+            overview: overview,
+            transactions: transactions,
+          ),
+        ),
+      ),
+    );
+  }
+
+  static Widget miniBottomNav({
+    required DashboardMiniNavTab activeTab,
+    required LoanMetrics? metrics,
+    required LoanOverview? overview,
+    required List<DashboardTxn> transactions,
+  }) {
+    return DashboardMiniBottomNav(
+      activeTab: activeTab,
+      metrics: metrics,
+      overview: overview,
+      transactions: transactions,
+    );
+  }
+}
+
+Future<List<DashboardTxn>> fetchDashboardTransactions() async {
+  try {
+    final transactions = await ServiceLocator.repaymentsApi.fetchAllTransactions();
+    final tx = <DashboardTxn>[];
+
+    for (final item in transactions) {
+      final loanType = (item['loanType'] ?? '').toString().trim();
+      final customerName = (item['customerName'] ?? '').toString().trim();
+      final notes = (item['notes'] ?? '').toString().trim();
+      final label = loanType.isEmpty ? 'Transaction' : '$loanType Repayment';
+      final lowerNotes = notes.toLowerCase();
+      final isLoan = lowerNotes.contains('loan disbursed') ||
+          lowerNotes.contains('new loan');
+
+      tx.add(
+        DashboardTxn(
+          customerId: (item['customerId'] ?? '').toString(),
+          customerName:
+              customerName.isEmpty ? 'Unknown customer' : customerName,
+          customerProfileImage: item['customerProfileImage']?.toString(),
+          amount: _numFromStatic(item, const ['amountPaid', 'amount', 'paymentAmount']),
+          date: _dateFromStatic(
+            item,
+            const ['paymentDate', 'date', 'createdAt', 'transactionDate'],
+          ),
+          isLoan: isLoan,
+          label: label,
+        ),
+      );
+    }
+
+    tx.sort((a, b) => _parseDateStatic(b.date).compareTo(_parseDateStatic(a.date)));
+    return tx;
+  } catch (_) {
+    return const [];
+  }
+}
+
+double _numFromStatic(Map<String, dynamic> map, List<String> keys) {
+  for (final key in keys) {
+    final value = map[key];
+    if (value is num) return value.toDouble();
+    if (value is String) {
+      final parsed = double.tryParse(value);
+      if (parsed != null) return parsed;
+    }
+  }
+  return 0;
+}
+
+String _dateFromStatic(Map<String, dynamic> map, List<String> keys) {
+  for (final key in keys) {
+    final value = map[key];
+    if (value == null) continue;
+    final text = value.toString().trim();
+    if (text.isNotEmpty) return text;
+  }
+  return DateTime.now().toIso8601String();
+}
+
+DateTime _parseDateStatic(String value) {
+  return DateTime.tryParse(value) ?? DateTime.fromMillisecondsSinceEpoch(0);
+}
+
+/// Reports tab for [AppShellPage] with dashboard mini navigation.
+class DashboardReportsTab extends StatefulWidget {
+  const DashboardReportsTab({super.key});
+
+  @override
+  State<DashboardReportsTab> createState() => _DashboardReportsTabState();
+}
+
+class _DashboardReportsTabState extends State<DashboardReportsTab> {
+  List<DashboardTxn> _transactions = const [];
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+  }
+
+  Future<void> _load() async {
+    final state = context.read<AppState>();
+    await state.loadDashboardMetricsFromApi();
+    await state.loadDashboardOverviewFromApi(months: 6);
+    final txs = await fetchDashboardTransactions();
+    if (!mounted) return;
+    setState(() {
+      _transactions = txs;
+      _loading = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    final state = context.watch<AppState>();
+    return ReportsComingSoonPage(
+      showBackButton: false,
+      bottomNavigationBar: DashboardFlowNav.miniBottomNav(
+        activeTab: DashboardMiniNavTab.reports,
+        metrics: state.dashboardMetrics,
+        overview: state.dashboardOverview,
+        transactions: _transactions,
+      ),
+    );
+  }
 }

@@ -1,11 +1,19 @@
 import 'package:flutter/material.dart';
 
 class ReportsComingSoonPage extends StatelessWidget {
-  const ReportsComingSoonPage({super.key});
+  const ReportsComingSoonPage({
+    super.key,
+    this.showBackButton = false,
+    this.bottomNavigationBar,
+  });
+
+  final bool showBackButton;
+  final Widget? bottomNavigationBar;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      bottomNavigationBar: bottomNavigationBar,
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
@@ -20,11 +28,13 @@ class ReportsComingSoonPage extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  _roundIconButton(
-                    icon: Icons.arrow_back_ios_new_rounded,
-                    onTap: () => Navigator.pop(context),
-                  ),
-                  const SizedBox(width: 10),
+                  if (showBackButton) ...[
+                    _roundIconButton(
+                      icon: Icons.arrow_back_ios_new_rounded,
+                      onTap: () => Navigator.pop(context),
+                    ),
+                    const SizedBox(width: 10),
+                  ],
                   const Expanded(
                     child: Text(
                       'Reports',

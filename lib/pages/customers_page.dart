@@ -103,7 +103,10 @@ class _CustomersPageState extends State<CustomersPage> {
     }).toList();
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Customers')),
+      appBar: AppBar(
+        automaticallyImplyLeading: false,
+        title: const Text('Customers'),
+      ),
 
       body: Column(
         children: [

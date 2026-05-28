@@ -23,7 +23,7 @@ class _AppShellPageState extends State<AppShellPage> {
   final List<Widget> _tabs = const [
     DashboardPage(),
     CustomersPage(),
-    _ReportsPlaceholder(),
+    DashboardReportsTab(),
     SettingsPage(),
   ];
 
@@ -173,18 +173,3 @@ class _AppShellPageState extends State<AppShellPage> {
   }
 }
 
-class _ReportsPlaceholder extends StatelessWidget {
-  const _ReportsPlaceholder();
-
-  @override
-  Widget build(BuildContext context) {
-    return const SafeArea(
-      child: Center(
-        child: Text(
-          "Reports: Coming soon",
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-        ),
-      ),
-    );
-  }
-}
