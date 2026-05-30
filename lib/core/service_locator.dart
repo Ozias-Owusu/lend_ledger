@@ -5,7 +5,9 @@ import 'package:lend_ledger/services/customers_api_service.dart';
 import 'package:lend_ledger/services/daily_loans_api_service.dart';
 import 'package:lend_ledger/services/loan_metrics_api_service.dart';
 import 'package:lend_ledger/services/repayments_api_service.dart';
+import 'package:lend_ledger/services/notifications_api_service.dart';
 import 'package:lend_ledger/services/soft_loans_api_service.dart';
+import 'package:lend_ledger/core/notifications/notification_sync_service.dart';
 
 /// Central dependency wiring for API/auth services.
 class ServiceLocator {
@@ -19,6 +21,9 @@ class ServiceLocator {
   static late final RepaymentsApiService repaymentsApi;
   static late final DailyLoansApiService dailyLoansApi;
   static late final SoftLoansApiService softLoansApi;
+  static late final NotificationsApiService notificationsApi;
+  static final NotificationSyncService notificationSync =
+      NotificationSyncService();
 
   static void init({SessionExpiredCallback? onSessionExpired}) {
     apiClient = ApiClient(
@@ -34,5 +39,6 @@ class ServiceLocator {
     repaymentsApi = RepaymentsApiService(apiClient);
     dailyLoansApi = DailyLoansApiService(apiClient);
     softLoansApi = SoftLoansApiService(apiClient);
+    notificationsApi = NotificationsApiService(apiClient);
   }
 }

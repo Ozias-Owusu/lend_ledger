@@ -254,6 +254,8 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
         );
 
         await appState.loadCustomersFromApi();
+        await Future<void>.delayed(const Duration(milliseconds: 800));
+        await appState.refreshNotificationsInbox();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text("Repayment saved successfully.")),
@@ -296,6 +298,8 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
         );
 
         await appState.loadCustomersFromApi();
+        await Future<void>.delayed(const Duration(milliseconds: 800));
+        await appState.refreshNotificationsInbox();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text("Daily loan created successfully.")),
@@ -332,6 +336,8 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
         );
 
         await appState.loadCustomersFromApi();
+        await Future<void>.delayed(const Duration(milliseconds: 800));
+        await appState.refreshNotificationsInbox();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text("Soft loan created successfully.")),

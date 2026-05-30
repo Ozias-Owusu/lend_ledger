@@ -11,6 +11,7 @@ import 'loan_insights_page.dart';
 import 'reports_coming_soon_page.dart';
 import '../widgets/dashboard_mini_bottom_nav.dart';
 import '../core/service_locator.dart';
+import 'notifications_page.dart';
 import '../services/repayments_api_service.dart';
 import '../state/app_state.dart';
 import '../utils/amount_formatter.dart';
@@ -116,13 +117,64 @@ class _DashboardPageState extends State<DashboardPage> {
                                 ],
                               ),
                             ),
-                            CircleAvatar(
-                              radius: 20,
-                              backgroundColor: Colors.white,
-                              child: Icon(
-                                Icons.notifications_none,
-                                color: Colors.grey.shade700,
-                              ),
+                            ListenableBuilder(
+                              listenable: ServiceLocator
+                                  .notificationSync.unreadCount,
+                              builder: (context, _) {
+                                final unread = ServiceLocator
+                                    .notificationSync.unreadCount.value;
+                                return GestureDetector(
+                                  onTap: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) =>
+                                            const NotificationsPage(),
+                                      ),
+                                    );
+                                  },
+                                  child: Stack(
+                                    clipBehavior: Clip.none,
+                                    children: [
+                                      CircleAvatar(
+                                        radius: 20,
+                                        backgroundColor: Colors.white,
+                                        child: Icon(
+                                          unread > 0
+                                              ? Icons.notifications_active
+                                              : Icons.notifications_none,
+                                          color: Colors.grey.shade700,
+                                        ),
+                                      ),
+                                      if (unread > 0)
+                                        Positioned(
+                                          right: -4,
+                                          top: -4,
+                                          child: Container(
+                                            padding: const EdgeInsets.all(4),
+                                            constraints: const BoxConstraints(
+                                              minWidth: 18,
+                                              minHeight: 18,
+                                            ),
+                                            decoration: const BoxDecoration(
+                                              color: Color(0xFFD7A9A4),
+                                              shape: BoxShape.circle,
+                                            ),
+                                            alignment: Alignment.center,
+                                            child: Text(
+                                              unread > 99 ? '99+' : '$unread',
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                );
+                              },
                             ),
                           ],
                         ),

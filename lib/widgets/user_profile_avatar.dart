@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:lend_ledger/models/auth/user_profile.dart';
+import 'package:lend_ledger/theme/theme.dart';
 import 'package:lend_ledger/utils/image_data_utils.dart';
 
 class UserProfileAvatar extends StatelessWidget {
@@ -18,34 +19,39 @@ class UserProfileAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final provider = _resolveImageProvider();
-    if (provider != null) {
-      return CircleAvatar(radius: radius, backgroundImage: provider);
+    final path = localImagePath?.trim();
+    if (path != null && path.isNotEmpty) {
+      final file = File(path);
+      if (file.existsSync()) {
+        return CircleAvatar(
+          key: ValueKey('local_$path'),
+          radius: radius,
+          backgroundColor: AppTheme.peach.withValues(alpha: 0.3),
+          backgroundImage: FileImage(file),
+        );
+      }
+    }
+
+    final bytes = ImageDataUtils.decodeToBytes(profile?.profilePicture);
+    if (bytes != null) {
+      return CircleAvatar(
+        key: ValueKey('remote_${profile?.id}_${bytes.length}'),
+        radius: radius,
+        backgroundImage: MemoryImage(bytes),
+      );
     }
 
     return CircleAvatar(
       radius: radius,
-      backgroundColor: Colors.indigo.shade100,
+      backgroundColor: AppTheme.peach.withValues(alpha: 0.45),
       child: Text(
         profile?.displayInitials ?? '?',
         style: TextStyle(
           fontSize: radius * 0.72,
           fontWeight: FontWeight.bold,
-          color: Colors.indigo.shade800,
+          color: const Color(0xFF5C4542),
         ),
       ),
     );
-  }
-
-  ImageProvider? _resolveImageProvider() {
-    final path = localImagePath?.trim();
-    if (path != null && path.isNotEmpty) {
-      final file = File(path);
-      if (file.existsSync()) return FileImage(file);
-    }
-
-    final bytes = ImageDataUtils.decodeToBytes(profile?.profilePicture);
-    if (bytes != null) return MemoryImage(bytes);
-    return null;
   }
 }

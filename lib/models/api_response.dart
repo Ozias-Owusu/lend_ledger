@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:lend_ledger/core/network/api_exception.dart';
 import 'package:lend_ledger/models/auth/auth_response.dart';
 import 'package:lend_ledger/models/auth/user_profile.dart';
+import 'package:lend_ledger/models/notification_models.dart';
 
 typedef JsonMapFactory<T> = T Function(Map<String, dynamic> json);
 
@@ -74,6 +75,42 @@ class ApiResponse<T> {
           throw const FormatException('User profile data must be a JSON object.');
         }
         return UserProfile.fromJson(Map<String, dynamic>.from(value));
+      },
+    );
+  }
+
+  static ApiResponse<NotificationListResult> decodeNotificationList(
+    String body,
+  ) {
+    return decodeBody(
+      body,
+      (value) {
+        if (value == null) return null;
+        if (value is! Map) {
+          throw const FormatException(
+            'Notification list data must be a JSON object.',
+          );
+        }
+        return NotificationListResult.fromJson(
+          Map<String, dynamic>.from(value),
+        );
+      },
+    );
+  }
+
+  static ApiResponse<int> decodeNotificationUnreadCount(String body) {
+    return decodeBody(
+      body,
+      (value) {
+        if (value == null) return null;
+        if (value is! Map) {
+          throw const FormatException(
+            'Unread count data must be a JSON object.',
+          );
+        }
+        final count = value['count'];
+        if (count is int) return count;
+        return int.tryParse(count?.toString() ?? '') ?? 0;
       },
     );
   }

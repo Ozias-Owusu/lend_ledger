@@ -48,7 +48,7 @@ class AuthApiService {
     return auth;
   }
 
-  Future<AuthResponse> register({
+  Future<String> register({
     required String fullName,
     required String email,
     required String password,
@@ -66,17 +66,50 @@ class AuthApiService {
       },
     );
 
-    try {
-      final auth = _parseAuthResponse(response.body);
-      await _persist(auth, fallbackEmail: email, fallbackName: fullName);
-      return auth;
-    } on ApiException {
-      return login(
-        email: email,
-        password: password,
-        deviceMetadata: await DeviceInfoCollector.collect(),
-      );
-    }
+    final envelope = ApiResponse.decodeVoid(response.body);
+    envelope.ensureSuccess(fallbackMessage: 'Registration failed.');
+    if (envelope.message.isNotEmpty) return envelope.message;
+    return 'Account created. Check your email to verify before signing in.';
+  }
+
+  Future<AuthResponse> verifyEmail({
+    required String userId,
+    required String token,
+  }) async {
+    final response = await _apiClient.postPublic(
+      '/api/Auth/verify-email',
+      body: VerifyEmailRequest(userId: userId.trim(), token: token.trim()).toJson(),
+    );
+    final auth = _parseAuthResponse(response.body);
+    await _persist(auth);
+    return auth;
+  }
+
+  Future<AuthResponse> verifyEmailFromLink({
+    required String userId,
+    required String token,
+  }) async {
+    final query = Uri(queryParameters: {
+      'userId': userId.trim(),
+      'token': token.trim(),
+    }).query;
+    final response = await _apiClient.getPublic('/api/Auth/verify-email?$query');
+    final auth = _parseAuthResponse(response.body);
+    await _persist(auth);
+    return auth;
+  }
+
+  Future<String> resendVerificationEmail(String email) async {
+    final response = await _apiClient.postPublic(
+      '/api/Auth/resend-verification',
+      body: ResendVerificationRequest(email: email).toJson(),
+    );
+    final envelope = ApiResponse.decodeVoid(response.body);
+    envelope.ensureSuccess(
+      fallbackMessage: 'Could not resend verification email.',
+    );
+    if (envelope.message.isNotEmpty) return envelope.message;
+    return 'Verification email sent.';
   }
 
   Future<UserProfile> getCurrentUser() async {

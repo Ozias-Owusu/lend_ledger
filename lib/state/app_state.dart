@@ -387,9 +387,15 @@ import 'package:lend_ledger/models/loan_record.dart';
 import 'package:lend_ledger/models/loan_metrics.dart';
 import 'package:lend_ledger/models/transactionRecord.dart';
 import 'package:lend_ledger/core/auth/session_navigation.dart' as session_nav;
+import 'package:lend_ledger/core/auth/password_policy.dart';
+import 'package:lend_ledger/core/network/api_exception.dart';
+import 'package:lend_ledger/core/notifications/firebase_messaging_service.dart';
+import 'package:lend_ledger/core/notifications/notification_sync_service.dart';
+import 'package:lend_ledger/core/profile/profile_image_storage.dart';
 import 'package:lend_ledger/core/service_locator.dart';
 import 'package:lend_ledger/models/auth/auth_requests.dart';
 import 'package:lend_ledger/models/auth/user_profile.dart';
+import 'package:lend_ledger/models/notification_models.dart';
 import 'package:lend_ledger/models/auth_tokens.dart';
 import 'package:lend_ledger/services/customers_api_service.dart';
 import 'package:lend_ledger/services/loan_metrics_api_service.dart';
@@ -424,6 +430,11 @@ class AppState extends ChangeNotifier {
   UserProfile? currentUserProfile;
   bool isLoadingUserProfile = false;
   String? userProfileError;
+  String? localProfileImagePath;
+  bool notificationPermissionGranted = false;
+
+  NotificationSyncService get notificationSync =>
+      ServiceLocator.notificationSync;
 
   // --- Core Data Loading ---
   Future<void> initialize() async {
@@ -500,6 +511,7 @@ class AppState extends ChangeNotifier {
       loggedInUserName = profile.fullName;
       userRole = profile.primaryRole ?? userRole;
       userProfileError = null;
+      await refreshLocalProfileImage(notify: false);
       return profile;
     } catch (e) {
       userProfileError = e.toString();
@@ -515,6 +527,98 @@ class AppState extends ChangeNotifier {
     loggedInEmail = tokens.email ?? loggedInEmail;
     loggedInUserName = tokens.fullName ?? loggedInUserName;
     userRole = tokens.role ?? userRole;
+    notifyListeners();
+  }
+
+  /// Stable key for local profile image storage (API user id, else email).
+  String? get profileStorageKey {
+    final id = currentUserProfile?.id.trim();
+    if (id != null && id.isNotEmpty) return id;
+    if (loggedInEmail.trim().isNotEmpty) return loggedInEmail.trim();
+    return null;
+  }
+
+  Future<void> refreshLocalProfileImage({bool notify = true}) async {
+    final key = profileStorageKey;
+    if (key == null) {
+      localProfileImagePath = null;
+    } else {
+      localProfileImagePath = await ProfileImageStorage.getPathForUser(key);
+    }
+    if (notify) notifyListeners();
+  }
+
+  Future<bool> requestNotificationPermission() async {
+    final granted = await notificationSync.ensurePermission();
+    notificationPermissionGranted = granted;
+    notifyListeners();
+    return granted;
+  }
+
+  Future<void> startNotificationPolling() async {
+    final key = profileStorageKey;
+    if (!isLoggedIn || key == null) return;
+
+    notificationPermissionGranted = await notificationSync.hasPermission();
+    if (!notificationPermissionGranted) {
+      notificationPermissionGranted =
+          await notificationSync.ensurePermission();
+    }
+
+    await notificationSync.start(userKey: key);
+    await registerPushTokenIfNeeded();
+    notifyListeners();
+  }
+
+  Future<void> registerPushTokenIfNeeded() async {
+    if (!isLoggedIn) return;
+    await FirebaseMessagingService.instance.registerTokenWithBackend();
+  }
+
+  void stopNotificationPolling() {
+    notificationSync.stop();
+  }
+
+  Future<void> refreshNotificationsInbox() => notificationSync.poll();
+
+  Future<NotificationListResult> fetchNotifications({
+    int page = 1,
+    int pageSize = 20,
+    bool unreadOnly = false,
+  }) {
+    return ServiceLocator.notificationsApi.fetchNotifications(
+      page: page,
+      pageSize: pageSize,
+      unreadOnly: unreadOnly,
+    );
+  }
+
+  Future<int> fetchUnreadNotificationCount() async {
+    final count = await ServiceLocator.notificationsApi.fetchUnreadCount();
+    notificationSync.unreadCount.value = count;
+    return count;
+  }
+
+  Future<void> markNotificationRead(String notificationId) async {
+    await ServiceLocator.notificationsApi.markAsRead(notificationId);
+    await notificationSync.refreshUnreadCount();
+  }
+
+  Future<void> markAllNotificationsRead() async {
+    await ServiceLocator.notificationsApi.markAllAsRead();
+    notificationSync.unreadCount.value = 0;
+  }
+
+  Future<void> saveLocalProfileImage(String sourcePath) async {
+    final key = profileStorageKey;
+    if (key == null) {
+      throw ApiException(
+        type: ApiExceptionType.validation,
+        message: 'Sign in again to save your profile photo.',
+      );
+    }
+    localProfileImagePath =
+        await ProfileImageStorage.saveForUser(key, sourcePath);
     notifyListeners();
   }
 
@@ -673,25 +777,62 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  Future<bool> signUp({
+  Future<String> signUp({
     required String name,
     required String email,
     required String password,
     required String confirmPassword,
     required String role,
   }) async {
-    if (name.isEmpty || email.isEmpty || password.length < 6) return false;
-    if (password != confirmPassword) return false;
+    if (name.isEmpty || email.isEmpty || password.isEmpty) {
+      throw ApiException(
+        type: ApiExceptionType.validation,
+        message: 'Please complete all required fields.',
+      );
+    }
+    if (!PasswordPolicy.isValid(password)) {
+      throw ApiException(
+        type: ApiExceptionType.validation,
+        message: PasswordPolicy.requirementsSummary,
+      );
+    }
+    if (password != confirmPassword) {
+      throw ApiException(
+        type: ApiExceptionType.validation,
+        message: 'Passwords do not match.',
+      );
+    }
 
-    final auth = await ServiceLocator.authApi.register(
+    return ServiceLocator.authApi.register(
       fullName: name,
       email: email,
       password: password,
       confirmPassword: confirmPassword,
       role: role,
     );
+  }
+
+  Future<void> verifyEmail({
+    required String userId,
+    required String token,
+    bool preferGet = false,
+  }) async {
+    final auth = preferGet
+        ? await ServiceLocator.authApi.verifyEmailFromLink(
+            userId: userId,
+            token: token,
+          )
+        : await ServiceLocator.authApi.verifyEmail(
+            userId: userId,
+            token: token,
+          );
     await _applyAuthenticatedSession(AuthTokens.fromAuthResponse(auth));
-    return true;
+    await loadCurrentUserProfile(force: true);
+    await registerPushTokenIfNeeded();
+  }
+
+  Future<String> resendVerificationEmail(String email) {
+    return ServiceLocator.authApi.resendVerificationEmail(email);
   }
 
   Future<bool> login(String email, String password) async {
@@ -701,6 +842,7 @@ class AppState extends ChangeNotifier {
       password: password,
     );
     await _applyAuthenticatedSession(AuthTokens.fromAuthResponse(auth));
+    await registerPushTokenIfNeeded();
     return true;
   }
 
@@ -741,6 +883,8 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> logout() async {
+    stopNotificationPolling();
+    await FirebaseMessagingService.instance.deleteToken();
     await ServiceLocator.authApi.logout();
     isLoggedIn = false;
     loggedInEmail = '';
@@ -748,16 +892,19 @@ class AppState extends ChangeNotifier {
     userRole = null;
     currentUserProfile = null;
     userProfileError = null;
+    localProfileImagePath = null;
     notifyListeners();
   }
 
   void handleSessionExpired() {
+    stopNotificationPolling();
     isLoggedIn = false;
     loggedInEmail = '';
     loggedInUserName = '';
     userRole = null;
     currentUserProfile = null;
     userProfileError = null;
+    localProfileImagePath = null;
     notifyListeners();
   }
 

@@ -1,7 +1,12 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:lend_ledger/core/notifications/firebase_messaging_service.dart';
+import 'package:lend_ledger/core/notifications/notification_navigation.dart';
+import 'package:lend_ledger/core/service_locator.dart';
+import 'package:lend_ledger/pages/notifications_page.dart';
 import 'package:lend_ledger/state/app_state.dart';
+import 'package:lend_ledger/widgets/notifications/in_app_notification_banner.dart';
 import 'package:provider/provider.dart';
 
 import 'customers_page.dart';
@@ -17,7 +22,8 @@ class AppShellPage extends StatefulWidget {
   State<AppShellPage> createState() => _AppShellPageState();
 }
 
-class _AppShellPageState extends State<AppShellPage> {
+class _AppShellPageState extends State<AppShellPage>
+    with WidgetsBindingObserver {
   late int _selectedNavIndex;
 
   final List<Widget> _tabs = const [
@@ -30,14 +36,68 @@ class _AppShellPageState extends State<AppShellPage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _selectedNavIndex = widget.initialIndex;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      final appState = context.read<AppState>();
+      await appState.startNotificationPolling();
+      await appState.notificationSync.processSystemLaunchTap();
+      await FirebaseMessagingService.instance.processPendingOpen();
+      await NotificationNavigation.processPending();
+    });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    context.read<AppState>().stopNotificationPolling();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      context.read<AppState>().notificationSync.poll();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final sync = ServiceLocator.notificationSync;
+
     return Scaffold(
       extendBody: true,
-      body: IndexedStack(index: _selectedNavIndex, children: _tabs),
+      body: Stack(
+        children: [
+          IndexedStack(index: _selectedNavIndex, children: _tabs),
+          Positioned(
+            top: MediaQuery.paddingOf(context).top + 8,
+            left: 16,
+            right: 16,
+            child: ListenableBuilder(
+              listenable: sync.foregroundAlert,
+              builder: (context, _) {
+                final alert = sync.foregroundAlert.value;
+                if (alert == null) return const SizedBox.shrink();
+                return InAppNotificationBanner(
+                  notification: alert,
+                  onDismiss: sync.dismissForegroundAlert,
+                  onTap: () {
+                    sync.dismissForegroundAlert();
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const NotificationsPage(),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
       bottomNavigationBar: Padding(
         padding: const EdgeInsets.fromLTRB(20, 0, 20, 14),
         child: ClipRRect(

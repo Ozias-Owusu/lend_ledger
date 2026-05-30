@@ -78,6 +78,29 @@ class ForgotPasswordRequest {
   Map<String, dynamic> toJson() => {'email': email};
 }
 
+class VerifyEmailRequest {
+  const VerifyEmailRequest({
+    required this.userId,
+    required this.token,
+  });
+
+  final String userId;
+  final String token;
+
+  Map<String, dynamic> toJson() => {
+        'userId': userId,
+        'token': token,
+      };
+}
+
+class ResendVerificationRequest {
+  const ResendVerificationRequest({required this.email});
+
+  final String email;
+
+  Map<String, dynamic> toJson() => {'email': email.trim()};
+}
+
 class ResetPasswordRequest {
   const ResetPasswordRequest({
     required this.email,

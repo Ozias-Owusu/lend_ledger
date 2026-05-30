@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:lend_ledger/core/auth/password_policy.dart';
 import 'package:lend_ledger/core/network/api_exception.dart';
+import 'package:lend_ledger/widgets/auth/password_form_field.dart';
 import 'package:lend_ledger/state/app_state.dart';
 import 'package:lend_ledger/utils/snackbar_utils.dart';
 import 'package:provider/provider.dart';
@@ -19,7 +21,6 @@ class _ChangePasswordSheetState extends State<ChangePasswordSheet> {
 
   bool _loading = false;
   bool _showCurrent = false;
-  bool _showNew = false;
   bool _showConfirm = false;
 
   @override
@@ -32,6 +33,10 @@ class _ChangePasswordSheetState extends State<ChangePasswordSheet> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+    if (!PasswordPolicy.isValid(_newCtl.text)) {
+      SnackbarUtils.showError(context, PasswordPolicy.requirementsSummary);
+      return;
+    }
 
     setState(() => _loading = true);
     try {
@@ -109,17 +114,10 @@ class _ChangePasswordSheetState extends State<ChangePasswordSheet> {
                   onToggle: () => setState(() => _showCurrent = !_showCurrent),
                 ),
                 const SizedBox(height: 14),
-                _passwordField(
+                PasswordFormField(
                   controller: _newCtl,
                   label: 'New password',
-                  show: _showNew,
-                  onToggle: () => setState(() => _showNew = !_showNew),
-                  validator: (v) {
-                    if (v == null || v.length < 6) {
-                      return 'At least 6 characters';
-                    }
-                    return null;
-                  },
+                  textInputAction: TextInputAction.next,
                 ),
                 const SizedBox(height: 14),
                 _passwordField(

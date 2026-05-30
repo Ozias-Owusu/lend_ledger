@@ -25,6 +25,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
   String? _localProfileImagePath;
   bool _showPasswordPreview = false;
+  bool _saving = false;
+  bool _dirty = false;
 
   bool _loadingProfile = true;
   String? _loadError;
@@ -37,6 +39,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
     if (cached != null) {
       _applyProfile(cached);
       _loadingProfile = false;
+      _localProfileImagePath =
+          context.read<AppState>().localProfileImagePath;
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _loadProfile();
@@ -68,7 +72,12 @@ class _EditProfilePageState extends State<EditProfilePage> {
     }
 
     _applyProfile(profile);
-    setState(() => _loadingProfile = false);
+    await appState.refreshLocalProfileImage(notify: false);
+    if (!mounted) return;
+    setState(() {
+      _loadingProfile = false;
+      _localProfileImagePath = appState.localProfileImagePath;
+    });
   }
 
   void _applyProfile(UserProfile profile) {
@@ -114,8 +123,51 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
     final img = await _picker.pickImage(source: source, imageQuality: 85);
     if (img != null && mounted) {
-      setState(() => _localProfileImagePath = img.path);
+      await _persistProfilePhoto(img.path, showSuccess: true);
     }
+  }
+
+  Future<void> _persistProfilePhoto(
+    String path, {
+    bool showSuccess = false,
+    bool popOnSuccess = false,
+  }) async {
+    setState(() => _saving = true);
+    try {
+      await context.read<AppState>().saveLocalProfileImage(path);
+      if (!mounted) return;
+      final savedPath = context.read<AppState>().localProfileImagePath;
+      setState(() {
+        _localProfileImagePath = savedPath ?? path;
+        _dirty = false;
+        _saving = false;
+      });
+      if (showSuccess) {
+        SnackbarUtils.showSuccess(context, 'Profile photo updated.');
+      }
+      if (popOnSuccess) {
+        Navigator.pop(context, true);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        _dirty = true;
+        _localProfileImagePath = path;
+      });
+      SnackbarUtils.showError(context, e);
+    }
+  }
+
+  Future<void> _saveProfile() async {
+    if (!_dirty || _localProfileImagePath == null) {
+      if (mounted) Navigator.pop(context);
+      return;
+    }
+    await _persistProfilePhoto(
+      _localProfileImagePath!,
+      popOnSuccess: true,
+    );
   }
 
   Future<void> _onPasswordFieldTap() async {
@@ -166,6 +218,22 @@ class _EditProfilePageState extends State<EditProfilePage> {
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
+        actions: [
+          if (_dirty && !_loadingProfile && _loadError == null)
+            TextButton(
+              onPressed: _saving ? null : _saveProfile,
+              child: _saving
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text(
+                      'Save',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+            ),
+        ],
       ),
       body: _loadingProfile
           ? const Center(child: CircularProgressIndicator())

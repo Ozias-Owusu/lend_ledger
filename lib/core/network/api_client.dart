@@ -34,7 +34,9 @@ class ApiClient {
         normalized.contains('/auth/login') ||
         normalized.contains('/auth/refresh') ||
         normalized.contains('/auth/forgot-password') ||
-        normalized.contains('/auth/reset-password');
+        normalized.contains('/auth/reset-password') ||
+        normalized.contains('/auth/verify-email') ||
+        normalized.contains('/auth/resend-verification');
   }
 
   Future<http.Response> get(
@@ -126,6 +128,10 @@ class ApiClient {
 
   Future<http.Response> postPublic(String path, {Object? body}) {
     return post(path, body: body, authenticated: false);
+  }
+
+  Future<http.Response> getPublic(String path) {
+    return get(path, authenticated: false);
   }
 
   Future<http.StreamedResponse> sendMultipart({

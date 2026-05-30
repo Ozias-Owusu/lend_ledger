@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:lend_ledger/core/auth/password_policy.dart';
 import 'package:lend_ledger/core/network/api_exception.dart';
+import 'package:lend_ledger/widgets/auth/password_form_field.dart';
 import 'package:lend_ledger/pages/login_page.dart';
 import 'package:lend_ledger/state/app_state.dart';
 import 'package:lend_ledger/utils/snackbar_utils.dart';
@@ -21,7 +23,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
   final _passwordCtl = TextEditingController();
   final _confirmCtl = TextEditingController();
   bool _loading = false;
-  bool _showPassword = false;
+  bool _showConfirmPassword = false;
 
   @override
   void initState() {
@@ -40,6 +42,10 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+    if (!PasswordPolicy.isValid(_passwordCtl.text)) {
+      SnackbarUtils.showError(context, PasswordPolicy.requirementsSummary);
+      return;
+    }
     setState(() => _loading = true);
 
     final appState = context.read<AppState>();
@@ -101,36 +107,33 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
                     v == null || v.trim().isEmpty ? 'Token is required' : null,
               ),
               const SizedBox(height: 16),
-              TextFormField(
+              PasswordFormField(
                 controller: _passwordCtl,
-                obscureText: !_showPassword,
-                decoration: InputDecoration(
-                  labelText: 'New password',
-                  border: const OutlineInputBorder(),
-                  suffixIcon: IconButton(
-                    icon: Icon(
-                      _showPassword ? Icons.visibility : Icons.visibility_off,
-                    ),
-                    onPressed: () =>
-                        setState(() => _showPassword = !_showPassword),
-                  ),
-                ),
-                validator: (v) {
-                  if (v == null || v.length < 6) {
-                    return 'Password must be at least 6 characters';
-                  }
-                  return null;
-                },
+                label: 'New password',
+                textInputAction: TextInputAction.next,
               ),
               const SizedBox(height: 16),
               TextFormField(
                 controller: _confirmCtl,
-                obscureText: !_showPassword,
-                decoration: const InputDecoration(
+                obscureText: !_showConfirmPassword,
+                decoration: InputDecoration(
                   labelText: 'Confirm password',
-                  border: OutlineInputBorder(),
+                  border: const OutlineInputBorder(),
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _showConfirmPassword
+                          ? Icons.visibility_off
+                          : Icons.visibility,
+                    ),
+                    onPressed: () => setState(
+                      () => _showConfirmPassword = !_showConfirmPassword,
+                    ),
+                  ),
                 ),
                 validator: (v) {
+                  if (v == null || v.isEmpty) {
+                    return 'Please confirm your password';
+                  }
                   if (v != _passwordCtl.text) {
                     return 'Passwords do not match';
                   }
