@@ -3,7 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'pin_storage_service.dart';
 
-/// Locks the app after the user has been away for [lockAfter].
+/// Locks the app after the user has been away or idle for [lockAfter].
 class AppLockService {
   AppLockService({
     PinStorageService? pinStorage,
@@ -11,23 +11,36 @@ class AppLockService {
   })  : _pinStorage = pinStorage ?? PinStorageService(),
         _localAuth = localAuth ?? LocalAuthentication();
 
-  static const lockAfter = Duration(hours: 1);
+  static const lockAfter = Duration(minutes: 30);
   static const _lastBackgroundKey = 'app_last_background_ms';
+  static const _lastActivityKey = 'app_last_activity_ms';
 
   final PinStorageService _pinStorage;
   final LocalAuthentication _localAuth;
 
   Future<void> recordBackgroundTime() async {
     final sp = await SharedPreferences.getInstance();
+    final now = DateTime.now().millisecondsSinceEpoch;
+    await sp.setInt(_lastBackgroundKey, now);
+  }
+
+  Future<void> recordUserActivity() async {
+    final sp = await SharedPreferences.getInstance();
     await sp.setInt(
-      _lastBackgroundKey,
+      _lastActivityKey,
       DateTime.now().millisecondsSinceEpoch,
     );
   }
 
-  Future<void> clearBackgroundTime() async {
+  Future<void> clearLockTimestamps() async {
     final sp = await SharedPreferences.getInstance();
     await sp.remove(_lastBackgroundKey);
+    await sp.remove(_lastActivityKey);
+    await recordUserActivity();
+  }
+
+  Future<void> clearBackgroundTime() async {
+    await clearLockTimestamps();
   }
 
   Future<bool> deviceSupportsBiometrics() async {
@@ -51,19 +64,40 @@ class AppLockService {
 
   Future<void> clearPin() => _pinStorage.clearPin();
 
-  Future<bool> shouldLock() async {
-    final sp = await SharedPreferences.getInstance();
-    final lastMs = sp.getInt(_lastBackgroundKey);
-    if (lastMs == null) return false;
-
-    final last = DateTime.fromMillisecondsSinceEpoch(lastMs);
-    if (DateTime.now().difference(last) < lockAfter) return false;
-
+  Future<bool> isSecurityEnabled() async {
     final pinOn = await isPinEnabled() && await hasPin();
+    final sp = await SharedPreferences.getInstance();
     final bioOn =
         (sp.getBool('biometricsEnabled') ?? false) &&
         await deviceSupportsBiometrics();
     return pinOn || bioOn;
+  }
+
+  Future<bool> shouldLock() async {
+    if (!await isSecurityEnabled()) return false;
+
+    final sp = await SharedPreferences.getInstance();
+    final now = DateTime.now();
+    final lastBg = sp.getInt(_lastBackgroundKey);
+    final lastAct = sp.getInt(_lastActivityKey);
+
+    if (lastBg == null && lastAct == null) return false;
+
+    if (lastBg != null) {
+      final elapsed = now.difference(
+        DateTime.fromMillisecondsSinceEpoch(lastBg),
+      );
+      if (elapsed >= lockAfter) return true;
+    }
+
+    if (lastAct != null) {
+      final elapsed = now.difference(
+        DateTime.fromMillisecondsSinceEpoch(lastAct),
+      );
+      if (elapsed >= lockAfter) return true;
+    }
+
+    return false;
   }
 
   Future<bool> canUnlockWithPin() async {
@@ -72,6 +106,8 @@ class AppLockService {
 
   Future<bool> tryBiometricUnlock() async {
     try {
+      final sp = await SharedPreferences.getInstance();
+      if (!(sp.getBool('biometricsEnabled') ?? false)) return false;
       final supported = await deviceSupportsBiometrics();
       if (!supported) return false;
       return _localAuth.authenticate(

@@ -93,6 +93,7 @@ class _PinSetupPageState extends State<PinSetupPage>
     setState(() => _saving = true);
     try {
       await _lockService.savePin(_entry);
+      await _lockService.clearLockTimestamps();
       if (!mounted) return;
       Navigator.pop(context, true);
     } catch (e) {

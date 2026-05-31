@@ -473,7 +473,7 @@ class _SecurityExpandable extends StatelessWidget {
                   Padding(
                     padding: const EdgeInsets.only(top: 8, left: 4, right: 4),
                     child: Text(
-                      'No biometrics detected. Create a 6-digit PIN to lock the app after 1 hour away.',
+                      'No biometrics detected. Create a 6-digit PIN to lock the app after 30 minutes away.',
                       style: AppTheme.body(
                         fontSize: 12,
                         color: const Color(0xFF7A6E6A),
