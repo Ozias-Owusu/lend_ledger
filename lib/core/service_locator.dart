@@ -7,6 +7,7 @@ import 'package:lend_ledger/services/loan_metrics_api_service.dart';
 import 'package:lend_ledger/services/repayments_api_service.dart';
 import 'package:lend_ledger/services/notifications_api_service.dart';
 import 'package:lend_ledger/services/soft_loans_api_service.dart';
+import 'package:lend_ledger/services/bulk_import_api_service.dart';
 import 'package:lend_ledger/core/notifications/notification_sync_service.dart';
 
 /// Central dependency wiring for API/auth services.
@@ -22,6 +23,7 @@ class ServiceLocator {
   static late final DailyLoansApiService dailyLoansApi;
   static late final SoftLoansApiService softLoansApi;
   static late final NotificationsApiService notificationsApi;
+  static late final BulkImportApiService bulkImportApi;
   static final NotificationSyncService notificationSync =
       NotificationSyncService();
 
@@ -40,5 +42,6 @@ class ServiceLocator {
     dailyLoansApi = DailyLoansApiService(apiClient);
     softLoansApi = SoftLoansApiService(apiClient);
     notificationsApi = NotificationsApiService(apiClient);
+    bulkImportApi = BulkImportApiService(apiClient);
   }
 }

@@ -92,15 +92,8 @@ class CustomersApiService {
   }
 
   Future<void> importCustomersFile(String filePath) async {
-    return importFileByPath(endpointPath: '/api/Customers/import', filePath: filePath);
-  }
-
-  Future<void> importFileByPath({
-    required String endpointPath,
-    required String filePath,
-  }) async {
     await _apiClient.sendMultipart(
-      path: endpointPath,
+      path: '/api/Customers/import',
       files: [await http.MultipartFile.fromPath('file', filePath)],
     );
   }

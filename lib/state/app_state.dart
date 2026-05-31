@@ -395,6 +395,7 @@ import 'package:lend_ledger/core/profile/profile_image_storage.dart';
 import 'package:lend_ledger/core/service_locator.dart';
 import 'package:lend_ledger/models/auth/auth_requests.dart';
 import 'package:lend_ledger/models/auth/user_profile.dart';
+import 'package:lend_ledger/models/bulk_import_models.dart';
 import 'package:lend_ledger/models/notification_models.dart';
 import 'package:lend_ledger/models/auth_tokens.dart';
 import 'package:lend_ledger/services/customers_api_service.dart';
@@ -703,15 +704,18 @@ class AppState extends ChangeNotifier {
     await loadCustomersFromApi();
   }
 
-  Future<void> importFileToApiByPath({
+  Future<BulkImportResult> importFileToApiByPath({
     required String endpointPath,
     required String filePath,
   }) async {
-    await ServiceLocator.customersApi.importFileByPath(
+    final result = await ServiceLocator.bulkImportApi.importFile(
       endpointPath: endpointPath,
       filePath: filePath,
     );
-    await loadCustomersFromApi();
+    if (endpointPath.toLowerCase().contains('/customers/')) {
+      await loadCustomersFromApi();
+    }
+    return result;
   }
 
   Future<void> updateCustomerInApi({
