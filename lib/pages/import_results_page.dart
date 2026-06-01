@@ -243,6 +243,7 @@ class _ResultTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ok = row.success;
+    final detail = row.detail?.trim();
     return Material(
       color: Colors.white.withValues(alpha: 0.9),
       borderRadius: BorderRadius.circular(14),
@@ -277,10 +278,10 @@ class _ResultTile extends StatelessWidget {
                       color: AppTheme.textPrimary,
                     ),
                   ),
-                  if (row.detail != null && row.detail!.isNotEmpty) ...[
+                  if (detail != null && detail.isNotEmpty) ...[
                     const SizedBox(height: 2),
                     Text(
-                      row.detail!,
+                      detail,
                       style: AppTheme.body(fontSize: 12),
                     ),
                   ],

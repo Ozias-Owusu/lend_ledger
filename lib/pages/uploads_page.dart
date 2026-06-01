@@ -7,7 +7,9 @@ import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 
+import '../core/import/import_file_staging.dart';
 import '../state/app_state.dart';
+import '../utils/snackbar_utils.dart';
 import 'import_preview_page.dart';
 
 class UploadsPage extends StatefulWidget {
@@ -169,14 +171,10 @@ class _UploadsPageState extends State<UploadsPage> {
       await OpenFilex.open(savePath);
     } on ApiException catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
+      SnackbarUtils.showError(context, e, title: 'Download failed');
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to download template: $e')),
-      );
+      SnackbarUtils.showError(context, e, title: 'Download failed');
     } finally {
       if (mounted) {
         setState(() => _downloading.remove(item.key));
@@ -191,11 +189,13 @@ class _UploadsPageState extends State<UploadsPage> {
         allowedExtensions: item.excelOnly
             ? const ['xlsx']
             : const ['xlsx', 'xls'],
+        withData: true,
       );
       if (result == null) return;
 
-      final path = result.files.single.path;
-      if (path == null || path.isEmpty) {
+      final picked = result.files.single;
+      final pickedName = picked.name.trim();
+      if (pickedName.isEmpty && (picked.path == null || picked.path!.isEmpty)) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Invalid file selected.')),
@@ -203,7 +203,10 @@ class _UploadsPageState extends State<UploadsPage> {
         return;
       }
 
-      final ext = path.split('.').last.toLowerCase();
+      final ext = (pickedName.contains('.')
+              ? pickedName.split('.').last
+              : (picked.path ?? '').split('.').last)
+          .toLowerCase();
       if (item.excelOnly && ext != 'xlsx') {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -214,23 +217,27 @@ class _UploadsPageState extends State<UploadsPage> {
         return;
       }
 
+      final staged = await ImportFileStaging.stage(picked);
+
       if (!mounted) return;
       await Navigator.push<void>(
         context,
         MaterialPageRoute(
           builder: (_) => ImportPreviewPage(
             title: item.title,
-            filePath: path,
+            filePath: staged.path,
+            fileName: staged.displayName,
             importPath: item.importPath,
             validateCustomers: item.validateCustomers,
           ),
         ),
       );
+    } on ImportFileReadException catch (e) {
+      if (!mounted) return;
+      SnackbarUtils.showError(context, e, title: 'Could not read file');
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not open file: $e')),
-      );
+      SnackbarUtils.showError(context, e, title: 'Could not open file');
     }
   }
 }

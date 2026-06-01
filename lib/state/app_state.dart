@@ -713,7 +713,11 @@ class AppState extends ChangeNotifier {
       filePath: filePath,
     );
     if (endpointPath.toLowerCase().contains('/customers/')) {
-      await loadCustomersFromApi();
+      try {
+        await loadCustomersFromApi();
+      } catch (_) {
+        // Import may have succeeded even if refresh fails.
+      }
     }
     return result;
   }

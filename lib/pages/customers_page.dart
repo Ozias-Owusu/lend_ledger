@@ -70,6 +70,7 @@ import 'package:provider/provider.dart';
 import '../state/app_state.dart';
 import '../utils/amount_formatter.dart';
 import '../utils/image_data_utils.dart';
+import '../utils/snackbar_utils.dart';
 import 'add_customer_page.dart';
 import 'customer_ledger_page.dart';
 import 'uploads_page.dart';
@@ -364,9 +365,11 @@ class _CustomersPageState extends State<CustomersPage> {
                 );
               } catch (e) {
                 if (!mounted) return;
-                ScaffoldMessenger.of(
+                SnackbarUtils.showError(
                   context,
-                ).showSnackBar(SnackBar(content: Text("Delete failed: $e")));
+                  e,
+                  title: 'Could not delete customer',
+                );
               }
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),

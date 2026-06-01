@@ -121,10 +121,10 @@ class _NotificationsPageState extends State<NotificationsPage> {
       await _load();
     } on ApiException catch (e) {
       if (!mounted) return;
-      SnackbarUtils.showError(context, e.message);
+      SnackbarUtils.showError(context, e);
     } catch (e) {
       if (!mounted) return;
-      SnackbarUtils.showError(context, e.toString());
+      SnackbarUtils.showError(context, e);
     } finally {
       if (mounted) setState(() => _markingAll = false);
     }
@@ -155,7 +155,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
       });
     } on ApiException catch (e) {
       if (!mounted) return;
-      SnackbarUtils.showError(context, e.message);
+      SnackbarUtils.showError(context, e);
     }
   }
 

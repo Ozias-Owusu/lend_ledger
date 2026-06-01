@@ -18,9 +18,9 @@ class BulkImportRowResult {
 
   factory BulkImportRowResult.fromJson(Map<String, dynamic> json) {
     return BulkImportRowResult(
-      rowNumber: _asInt(json['rowNumber'], 0),
-      success: json['success'] == true,
-      message: json['message']?.toString() ?? '',
+      rowNumber: _asInt(_read(json, 'rowNumber', 'RowNumber'), 0),
+      success: _read(json, 'success', 'Success') == true,
+      message: _read(json, 'message', 'Message')?.toString() ?? '',
       detail: _extractDetail(json),
     );
   }
@@ -50,7 +50,7 @@ class BulkImportResult {
       results.where((r) => r.success).toList();
 
   factory BulkImportResult.fromJson(Map<String, dynamic> json) {
-    final resultsRaw = json['results'];
+    final resultsRaw = _read(json, 'results', 'Results');
     final results = resultsRaw is List
         ? resultsRaw
             .whereType<Map>()
@@ -61,9 +61,10 @@ class BulkImportResult {
         : <BulkImportRowResult>[];
 
     return BulkImportResult(
-      totalRows: _asInt(json['totalRows'], results.length),
-      successfulRows: _asInt(json['successfulRows'], 0),
-      failedRows: _asInt(json['failedRows'], 0),
+      totalRows: _asInt(_read(json, 'totalRows', 'TotalRows'), results.length),
+      successfulRows:
+          _asInt(_read(json, 'successfulRows', 'SuccessfulRows'), 0),
+      failedRows: _asInt(_read(json, 'failedRows', 'FailedRows'), 0),
       results: results,
     );
   }
@@ -73,8 +74,21 @@ class BulkImportResult {
     if (decoded is! Map) {
       throw const FormatException('Unexpected import response format.');
     }
-    return BulkImportResult.fromJson(Map<String, dynamic>.from(decoded));
+    final map = Map<String, dynamic>.from(decoded);
+
+    // Some endpoints return { success, data: { ... } }.
+    final data = map['data'];
+    if (data is Map) {
+      return BulkImportResult.fromJson(Map<String, dynamic>.from(data));
+    }
+
+    return BulkImportResult.fromJson(map);
   }
+}
+
+dynamic _read(Map<String, dynamic> json, String camel, String pascal) {
+  if (json.containsKey(camel)) return json[camel];
+  return json[pascal];
 }
 
 int _asInt(dynamic value, int fallback) {
@@ -83,10 +97,20 @@ int _asInt(dynamic value, int fallback) {
 }
 
 String? _extractDetail(Map<String, dynamic> json) {
-  for (final key in ['customer', 'dailyLoan', 'softLoan', 'repayment']) {
+  for (final key in [
+    'customer',
+    'Customer',
+    'dailyLoan',
+    'DailyLoan',
+    'softLoan',
+    'SoftLoan',
+    'repayment',
+    'Repayment',
+  ]) {
     final nested = json[key];
     if (nested is Map) {
-      final name = nested['fullName'] ?? nested['id'];
+      final map = Map<String, dynamic>.from(nested);
+      final name = map['fullName'] ?? map['FullName'] ?? map['id'] ?? map['Id'];
       if (name != null) return name.toString();
     }
   }

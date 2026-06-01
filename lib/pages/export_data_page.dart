@@ -11,6 +11,7 @@ import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:provider/provider.dart';
+import '../utils/snackbar_utils.dart';
 
 
 enum ExportDataType {
@@ -157,8 +158,7 @@ class _ExportDataPageState extends State<ExportDataPage> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to export file: $e')));
+        SnackbarUtils.showError(context, e, title: 'Export failed');
       }
     } finally {
       if (mounted) {

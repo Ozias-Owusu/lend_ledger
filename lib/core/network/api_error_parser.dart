@@ -41,7 +41,29 @@ class ApiErrorParser {
       // Fall through to raw body.
     }
 
-    return body;
+    return _cleanPlainBody(body);
+  }
+
+  static String _cleanPlainBody(String body) {
+    var text = body.trim();
+    if (text.isEmpty) return '';
+
+    try {
+      final decoded = jsonDecode(text);
+      if (decoded is String && decoded.trim().isNotEmpty) {
+        return decoded.trim();
+      }
+    } catch (_) {
+      // Plain text response (e.g. ASP.NET Conflict message).
+    }
+
+    if (text.length >= 2 &&
+        text.startsWith('"') &&
+        text.endsWith('"')) {
+      text = text.substring(1, text.length - 1).trim();
+    }
+
+    return text;
   }
 
   static String _appendErrors(String message, dynamic errors) {

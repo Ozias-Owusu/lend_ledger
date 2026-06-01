@@ -13,6 +13,7 @@ import '../services/repayments_api_service.dart';
 import '../services/soft_loans_api_service.dart';
 import '../state/app_state.dart';
 import '../utils/amount_formatter.dart';
+import '../utils/snackbar_utils.dart';
 
 // Enum for clarity in duration units
 enum DurationUnit { days, weeks, months }
@@ -169,9 +170,7 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
       });
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("Unable to load loans: $e")));
+      SnackbarUtils.showError(context, e, title: 'Could not load loans');
     }
   }
 
@@ -264,9 +263,7 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("Failed to save repayment: $e")),
-          );
+          SnackbarUtils.showError(context, e, title: 'Repayment not saved');
         }
       } finally {
         if (mounted) {
@@ -308,9 +305,7 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("Failed to create daily loan: $e")),
-          );
+          SnackbarUtils.showError(context, e, title: 'Daily loan not created');
         }
       } finally {
         if (mounted) setState(() => _isSavingTransaction = false);
@@ -346,9 +341,7 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("Failed to create soft loan: $e")),
-          );
+          SnackbarUtils.showError(context, e, title: 'Soft loan not created');
         }
       } finally {
         if (mounted) setState(() => _isSavingTransaction = false);

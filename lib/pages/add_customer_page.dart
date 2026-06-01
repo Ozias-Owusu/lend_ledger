@@ -8,6 +8,7 @@ import 'package:lend_ledger/models/customer.dart';
 import 'package:provider/provider.dart';
 import '../state/app_state.dart';
 import '../utils/image_data_utils.dart';
+import '../utils/snackbar_utils.dart';
 
 class AddCustomerPage extends StatefulWidget {
   final Customer? customerToEdit;
@@ -169,9 +170,7 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to create customer: $e')),
-        );
+        SnackbarUtils.showError(context, e);
       }
     } finally {
       if (mounted) {

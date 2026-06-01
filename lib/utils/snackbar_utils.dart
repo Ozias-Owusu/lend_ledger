@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:lend_ledger/core/network/api_exception.dart';
+import 'package:lend_ledger/theme/theme.dart';
+import 'package:lend_ledger/utils/user_friendly_errors.dart';
+import 'package:lend_ledger/widgets/app_error_dialog.dart';
 
 class SnackbarUtils {
   static void show(
@@ -11,26 +13,34 @@ class SnackbarUtils {
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message),
-        backgroundColor: backgroundColor,
+        content: Text(
+          message,
+          style: AppTheme.body(color: AppTheme.textPrimary, fontSize: 14),
+        ),
+        backgroundColor: backgroundColor ?? Colors.white,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
         duration: duration,
       ),
     );
   }
 
-  static void showError(BuildContext context, Object error) {
-    show(
-      context,
-      messageFromError(error),
-      backgroundColor: Colors.red.shade700,
-    );
+  /// Shows a readable error dialog instead of a fleeting red snackbar.
+  static Future<void> showError(
+    BuildContext context,
+    Object error, {
+    String? title,
+  }) {
+    return AppErrorDialog.show(context, error: error, title: title);
   }
 
   static void showSuccess(BuildContext context, String message) {
     show(
       context,
       message,
-      backgroundColor: Colors.green.shade700,
+      backgroundColor: const Color(0xFFE8F5E9),
+      duration: const Duration(seconds: 3),
     );
   }
 
@@ -41,42 +51,20 @@ class SnackbarUtils {
   }) {
     messenger.showSnackBar(
       SnackBar(
-        content: Text(message),
-        backgroundColor: backgroundColor,
+        content: Text(
+          message,
+          style: AppTheme.body(color: AppTheme.textPrimary, fontSize: 14),
+        ),
+        backgroundColor: backgroundColor ?? Colors.white,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
       ),
     );
   }
 
+  /// Used by snackbars or brief inline hints; prefer [showError] for failures.
   static String messageFromError(Object error) {
-    if (error is ApiException) {
-      switch (error.type) {
-        case ApiExceptionType.network:
-          return 'Network connection lost. Please check your internet.';
-        case ApiExceptionType.timeout:
-          return 'Request timed out. Please try again.';
-        case ApiExceptionType.unauthorized:
-          return error.message.isNotEmpty
-              ? error.message
-              : 'Your session has expired. Please login again.';
-        case ApiExceptionType.validation:
-          return error.message.isNotEmpty
-              ? error.message
-              : 'Please check your input and try again.';
-        case ApiExceptionType.server:
-          return error.message.isNotEmpty
-              ? error.message
-              : 'Something went wrong. Please try again.';
-        case ApiExceptionType.unknown:
-          return error.message.isNotEmpty
-              ? error.message
-              : 'Something went wrong. Please try again.';
-      }
-    }
-
-    final text = error.toString().replaceFirst('Exception: ', '').trim();
-    if (text.isEmpty) {
-      return 'Something went wrong. Please try again.';
-    }
-    return text;
+    return UserFriendlyErrors.message(error);
   }
 }
